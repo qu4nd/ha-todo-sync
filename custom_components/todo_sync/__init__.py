@@ -210,6 +210,8 @@ class TodoSyncer:
             "Sync (trigger=%s): %s has %d items, %s has %d items, snapshot %d",
             trigger, self.a, len(items_a), self.b, len(items_b), len(snap),
         )
+        _LOGGER.debug("A items: %s", {k: self._val(v) for k, v in items_a.items()})
+        _LOGGER.debug("B items: %s", {k: self._val(v) for k, v in items_b.items()})
         new_snap: dict[str, dict] = {}
 
         for key in set(items_a) | set(items_b) | set(snap):
