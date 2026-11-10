@@ -14,6 +14,7 @@ Bidirectional sync of two Home Assistant to-do lists, built for **Bring!** ⇄ *
 - **"Sync now" button** entity for ad hoc syncs
 - Conflicts: if both sides changed the same item, the list that triggered the sync wins (list A on periodic runs)
 - Completed items are treated as history: they are never created or deleted on the other side; only the status of items existing on both sides is synced
+- Safety brake: if at least 5 open items (and more than half) vanish from a list at once, the sync waits 6 minutes and only applies it if the result is unchanged (protects against faulty reads)
 - Fully UI-configured (config flow + options flow), English and German translations
 
 ## Requirements
@@ -85,6 +86,7 @@ Bidirektionaler Sync zweier To-do-Listen in Home Assistant, gedacht für **Bring
 - **Button „Sync now"** für den sofortigen Abgleich
 - Konflikte: Haben beide Seiten denselben Eintrag geändert, gewinnt die auslösende Liste (beim periodischen Lauf Liste A)
 - Erledigte Einträge gelten als Verlauf: Sie werden auf der anderen Seite nie angelegt oder gelöscht; nur der Status von Einträgen, die auf beiden Seiten existieren, wird abgeglichen
+- Sicherheitsbremse: Verschwinden mindestens 5 offene Einträge (und mehr als die Hälfte) auf einmal aus einer Liste, wartet der Sync 6 Minuten und übernimmt es nur bei unverändertem Ergebnis (Schutz vor fehlerhaften Reads)
 
 ## Voraussetzungen
 
