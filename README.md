@@ -12,7 +12,7 @@
 [![IoT Class](https://img.shields.io/badge/IoT%20Class-Local%20Push-success?style=for-the-badge)](https://www.home-assistant.io/blog/2016/02/12/classifying-the-internet-of-things/)
 [![License](https://img.shields.io/github/license/qu4nd/ha-todo-sync?style=for-the-badge)](LICENSE)
 
-[**🇬🇧 English**](#-features) • [**🇩🇪 Deutsch**](#-deutsch) • [**🐛 Report Issue**](https://github.com/qu4nd/ha-todo-sync/issues)
+[**🐛 Report Issue**](https://github.com/qu4nd/ha-todo-sync/issues)
 
 </div>
 
@@ -127,77 +127,6 @@ logger:
 ```
 
 Check **Settings** → **System** → **Logs** and filter for `todo_sync`.
-
----
-
-<div align="center">
-
-<a id="-deutsch"></a>
-
-# 🇩🇪 Deutsch
-
-**Bidirektionaler Echtzeit- & Intervall-Sync zweier To-do-Listen in Home Assistant.**  
-*Entwickelt für **Bring!** ⇄ **Alexa-Einkaufsliste**, nutzbar mit beliebigen `todo`-Entitäten.*
-
-</div>
-
-## ✨ Funktionen
-
-* 🔄 **Echter Zwei-Wege-Sync:** Anlegen, Löschen, Abhaken und Wieder-Öffnen werden über einen persistenten 3-Wege-Snapshot in beide Richtungen synchronisiert.
-* ⚖️ **Intelligente Mengen- & Detail-Brücke:** Übersetzt automatisch zwischen Listen *mit* Beschreibungsfeld (z. B. **Bring!**) und Listen *ohne* Beschreibungsfeld (z. B. **Alexa**).
-* ⚡ **Event-gesteuert + Intervall:** Reagiert automatisch auf jede Listenänderung (`3 s` Entprellung) plus einstellbarem Zeitintervall (`1–1440 Min`, Standard `5 Min`).
-* 🔘 **„Sync now“-Button:** Eigene Button-Entität pro Listenpaar für den sofortigen Abgleich per Dashboard oder Automation.
-* 🛡️ **Sicherheitsbremse bei Massenlöschung:** Verschwinden mindestens 5 offene Einträge (und mehr als die Hälfte) auf einmal aus einer Liste, wartet der Sync `6 Minuten` und übernimmt das Löschen nur, wenn das Ergebnis unverändert bleibt (Schutz vor fehlerhaften Cloud-Reads).
-* 🕓 **Sauberer Verlauf:** Erledigte Einträge (wie *„Zuletzt verwendet“* in Bring!) werden auf der Gegenseite nie neu angelegt oder gelöscht – nur Statuswechsel von Einträgen, die auf beiden Seiten existieren, werden abgeglichen.
-
----
-
-## 🧠 Wie die Mengen- & Detail-Übersetzung funktioniert
-
-Listen mit Beschreibungsfeld (**Bring!**) nutzen dieses nativ; andere (**Alexa**) erhalten das Format `Name Details`. Beim Einlesen und Schreiben passiert Folgendes:
-
-| Aktion | Bring! (`todo.zuhause`) | ⇄ | Alexa (`todo.alexa_shopping_list`) | Verhalten |
-| :--- | :--- | :---: | :--- | :--- |
-| **In Bring! angelegt** | **Name:** `Milch`<br>**Details:** `3` | ➡️ | **Titel:** `Milch 3` | Hängt die Beschreibung bei Listen ohne Beschreibungsfeld an den Titel an. |
-| **Über Alexa angelegt** | **Name:** `Käse`<br>**Details:** `200 g` | ⬅️ | **Titel:** `Käse 200 g` | Trennt Zahlen am Ende inkl. optionaler Einheit (`2`, `200 g`, `0,5l`) sauber ins Detailfeld ab. |
-| **Bekannter Freitext** | **Name:** `Test`<br>**Details:** `bringdetails` | 🔄 | **Titel:** `Test bringdetails` | Erkennt bekannte Kombinationen aus Bring! oder dem letzten Sync exakt wieder – auch ohne Zahl. |
-
----
-
-## 📦 Installation & Einrichtung
-
-> [!IMPORTANT]
-> Setzt **Home Assistant 2026.11.0** oder neuer voraus (getestet unter **2026.11.1**) sowie zwei eingerichtete `todo`-Entitäten.
-
-1. **Marketplace / HACS:** Unter **Einstellungen** → **Marketplace** (bzw. **HACS** vor 2026.11) → **⋮** → *Benutzerdefinierte Repositories* die URL `https://github.com/qu4nd/ha-todo-sync` als Kategorie **Integration** hinzufügen, **To-do Sync** installieren und Home Assistant neu starten. *(Alternativ manuell nach `<config>/custom_components/todo_sync` kopieren).*
-2. **Einrichten:** Unter **Einstellungen** → **Geräte & Dienste** → **Integration hinzufügen** nach **To-do Sync** suchen.
-3. **Liste A** und **Liste B** auswählen (müssen verschieden sein). Über **Konfigurieren** lässt sich optional das Sync-Intervall anpassen.
-
-> [!TIP]
-> **Vor der Ersteinrichtung:** Einmal alte, erledigte Einträge in beiden Listen aufräumen – das sorgt für einen sauberen Start-Snapshot.
-
----
-
-## ⚠️ Konflikte & Einschränkungen
-
-* **Konfliktlösung:** Einträge werden über den Namen (ohne Groß-/Kleinschreibung) zugeordnet. Haben beide Seiten denselben Eintrag gleichzeitig geändert, gewinnt die auslösende Liste (beim periodischen Lauf gewinnt **Liste A**).
-* **Umbenennen:** Wird als Löschen + Neuanlegen synchronisiert.
-* **Freitext-Details auf Alexa:** Details ohne Zahl bei einem *komplett neuen* Alexa-Eintrag (z. B. `„Milch fettarm“`) gelten als Teil des Namens.
-* **Polling-Intervalle der Quellen:** Änderungen kommen so schnell an, wie die Quell-Integrationen aktualisieren (Bring! im Core fragt alle `90 s` ab, Alexa Devices alle `5 Min`).
-
----
-
-## 🔍 Fehlersuche & Debug-Logging
-
-Beim Start wartet der Sync automatisch, bis beide Listen verfügbar sind. Für detaillierte Infos (alle Einträge beider Listen + Entscheidung pro Eintrag) das Debug-Logging unter **Entwicklerwerkzeuge** → **Aktionen** → `logger.set_level` aktivieren:
-
-```yaml
-action: logger.set_level
-data:
-  custom_components.todo_sync: debug
-```
-
-Oder dauerhaft in der `configuration.yaml` eintragen und anschließend unter **Einstellungen** → **System** → **Protokolle** nach `todo_sync` filtern.
 
 ---
 
