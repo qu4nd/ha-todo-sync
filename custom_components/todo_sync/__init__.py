@@ -9,6 +9,7 @@ from datetime import timedelta
 
 from homeassistant.components.todo import TodoListEntityFeature
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
 from homeassistant.helpers.event import (
     async_call_later,
@@ -30,6 +31,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["button"]
+RETRY_SECONDS = 30
 DONE = "completed"
 OPEN = "needs_action"
 _QTY_RE = re.compile(r"^(.+?)\s+(\d+(?:[.,]\d+)?(?:\s*[^\W\d_]+\.?)?)$")
@@ -95,9 +97,21 @@ class TodoSyncer:
             self._debounce()
         self._debounce = async_call_later(self.hass, delay, self._run)
 
+    def _ready(self) -> bool:
+        for entity_id in (self.a, self.b):
+            state = self.hass.states.get(entity_id)
+            if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                return False
+        return True
+
     async def _run(self, _now) -> None:
         self._debounce = None
         trigger, self._pending_trigger = self._pending_trigger, None
+        if not self._ready():
+            # Entities are not loaded yet (e.g. at startup); a state change or retry follows
+            _LOGGER.debug("Lists not ready, retrying in %s s", RETRY_SECONDS)
+            self._schedule(trigger, RETRY_SECONDS)
+            return
         async with self._lock:
             try:
                 await self._sync(trigger)
