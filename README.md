@@ -12,7 +12,7 @@ Bidirectional sync of two Home Assistant to-do lists, built for **Bring!** ⇄ *
 - Item **details/quantity** are carried over: Bring! description `3` on "Milch" becomes "Milch 3" on lists without description support (e.g. Alexa), and back
 - Triggered on every list change (3 s debounce) plus a **configurable periodic sync** (1–1440 min, default 5)
 - **"Sync now" button** entity for ad hoc syncs
-- Conflicts: the side that changed last wins
+- Conflicts: if both sides changed the same item, the list that triggered the sync wins (list A on periodic runs)
 - Completed items are treated as history: they are never created or deleted on the other side; only the status of items existing on both sides is synced
 - Fully UI-configured (config flow + options flow), English and German translations
 
@@ -83,7 +83,7 @@ Bidirektionaler Sync zweier To-do-Listen in Home Assistant, gedacht für **Bring
 - **Details/Menge** werden übertragen: Bring!-Beschreibung `3` bei „Milch" wird auf Listen ohne Beschreibungsfeld (z. B. Alexa) zu „Milch 3" und zurück
 - Auslösung bei jeder Listenänderung (3 s Verzögerung) plus **einstellbares Intervall** (1–1440 Min, Standard 5)
 - **Button „Sync now"** für den sofortigen Abgleich
-- Konflikte: Die zuletzt geänderte Seite gewinnt
+- Konflikte: Haben beide Seiten denselben Eintrag geändert, gewinnt die auslösende Liste (beim periodischen Lauf Liste A)
 - Erledigte Einträge gelten als Verlauf: Sie werden auf der anderen Seite nie angelegt oder gelöscht; nur der Status von Einträgen, die auf beiden Seiten existieren, wird abgeglichen
 
 ## Voraussetzungen

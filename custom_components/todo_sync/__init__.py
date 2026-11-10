@@ -32,6 +32,7 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["button"]
 RETRY_SECONDS = 30
+MASS_DELETE_MIN = 5
 DONE = "completed"
 OPEN = "needs_action"
 _QTY_RE = re.compile(r"^(.+?)\s+(\d+(?:[.,]\d+)?(?:\s*[^\W\d_]+\.?)?)$")
@@ -55,6 +56,7 @@ class TodoSyncer:
         self._unsubs: list[CALLBACK_TYPE] = []
         self._debounce: CALLBACK_TYPE | None = None
         self._pending_trigger: str | None = None
+        self._suspect_runs = 0
 
     async def async_start(self) -> None:
         data = await self._store.async_load()
@@ -90,7 +92,7 @@ class TodoSyncer:
 
     @callback
     def _schedule(self, trigger: str | None, delay: float) -> None:
-        # Latest trigger wins conflicts ("last change wins")
+        # The most recent trigger decides conflicts (the list that changed last)
         if trigger:
             self._pending_trigger = trigger
         if self._debounce:
@@ -208,6 +210,17 @@ class TodoSyncer:
         if len(data) > 2:
             await self._call("update_item", data)
 
+    def _mass_delete_suspected(
+        self, items_a: dict[str, dict], items_b: dict[str, dict]
+    ) -> bool:
+        """True if a list lost most open items at once (likely a faulty read)."""
+        open_snap = {k for k, s in self._snapshot.items() if s["status"] == OPEN}
+        for items in (items_a, items_b):
+            missing = {k for k in open_snap if k not in items}
+            if len(missing) >= MASS_DELETE_MIN and len(missing) * 2 > len(open_snap):
+                return True
+        return False
+
     async def _sync(self, trigger: str | None) -> None:
         raw = {e: await self._fetch(e) for e in (self.a, self.b)}
         # Exact "name" and "name details" titles known from description-capable lists / last sync
@@ -226,6 +239,16 @@ class TodoSyncer:
                     learn(i["summary"].strip(), (i.get("description") or "").strip())
         items_a = self._parse(self.a, raw[self.a], known)
         items_b = self._parse(self.b, raw[self.b], known)
+        if self._mass_delete_suspected(items_a, items_b):
+            self._suspect_runs += 1
+            if self._suspect_runs < 2:
+                _LOGGER.warning(
+                    "Most open items vanished from a list at once; skipping this run "
+                    "and re-checking (a second identical result is accepted)"
+                )
+                self._schedule(trigger, RETRY_SECONDS)
+                return
+        self._suspect_runs = 0
         snap = self._snapshot
         _LOGGER.debug(
             "Sync (trigger=%s): %s has %d items, %s has %d items, snapshot %d",
