@@ -8,7 +8,7 @@
 *Purpose-built for **Bring!** ⇄ **Alexa Shopping List**, compatible with any To-do integration.*
 
 ![Version](https://img.shields.io/badge/version-1.0.9-blue?style=for-the-badge)
-[![HA Version](https://img.shields.io/badge/Home%20Assistant-2026.11.1%2B-41BDF5?style=for-the-badge&logo=home-assistant&logoColor=white)](https://www.home-assistant.io/)
+[![HA Version](https://img.shields.io/badge/Home%20Assistant-2026.10.0%2B-41BDF5?style=for-the-badge&logo=home-assistant&logoColor=white)](https://www.home-assistant.io/)
 [![IoT Class](https://img.shields.io/badge/IoT%20Class-Local%20Push-success?style=for-the-badge)](https://www.home-assistant.io/blog/2016/02/12/classifying-the-internet-of-things/)
 [![License](https://img.shields.io/github/license/qu4nd/ha-todo-sync?style=for-the-badge)](LICENSE)
 
@@ -45,7 +45,7 @@ Lists like **Bring!** store quantities and notes in a dedicated `description` fi
 ## 📦 Installation
 
 > [!IMPORTANT]
-> Requires **Home Assistant 2026.11.1** or newer and at least two existing `todo` entities.
+> Requires **Home Assistant 2026.11.0** or newer (tested on **2026.11.1**) and at least two existing `todo` entities.
 
 ### Option 1: Marketplace / HACS (Recommended)
 
@@ -167,7 +167,7 @@ Listen mit Beschreibungsfeld (**Bring!**) nutzen dieses nativ; andere (**Alexa**
 ## 📦 Installation & Einrichtung
 
 > [!IMPORTANT]
-> Setzt **Home Assistant 2026.11.1** (oder neuer) sowie zwei eingerichtete `todo`-Entitäten voraus.
+> Setzt **Home Assistant 2026.11.0** oder neuer voraus (getestet unter **2026.11.1**) sowie zwei eingerichtete `todo`-Entitäten.
 
 1. **Marketplace / HACS:** Unter **Einstellungen** → **Marketplace** (bzw. **HACS** vor 2026.11) → **⋮** → *Benutzerdefinierte Repositories* die URL `https://github.com/qu4nd/ha-todo-sync` als Kategorie **Integration** hinzufügen, **To-do Sync** installieren und Home Assistant neu starten. *(Alternativ manuell nach `<config>/custom_components/todo_sync` kopieren).*
 2. **Einrichten:** Unter **Einstellungen** → **Geräte & Dienste** → **Integration hinzufügen** nach **To-do Sync** suchen.
