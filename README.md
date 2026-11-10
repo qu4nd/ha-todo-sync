@@ -46,24 +46,26 @@ Items are matched by **name** (case-insensitive), since Bring! and Alexa use dif
 
 ### Details / quantity
 Lists that support item descriptions (Bring!) use them. Lists that don't (Alexa) get `Name Details`, e.g. `Käse 200 g`. When reading such a title:
-1. If the start matches a name known from the other list, the rest is the detail (`Saure Sahne 2`).
-2. Otherwise a trailing number with optional unit is the detail (`Käse 200 g`, `Cola 0,5l`).
+1. If the whole title exactly matches a known title (a Bring! name, a `Name Details` combination, or one from the last sync), it is split accordingly (`Test bringdetails` → name `Test`, detail `bringdetails`).
+2. Otherwise only a trailing number with optional unit is the detail (`Käse 200 g`, `Saure Sahne 2`, `Cola 0,5l`). Everything else is the name.
 
 ## Limitations
 
 - Renaming an item is synced as delete + add.
-- Details without a leading number on a *new* Alexa item (e.g. "Milch fettarm") are read as part of the name.
+- Details without a number on a *new* Alexa item (e.g. "Milch fettarm") are read as part of the name.
 - Bring!'s "recently used" is exposed by its integration as completed items; behaviour depends on that integration.
 - Parentheses in names are not specially handled.
+- Changes only arrive as fast as the source integrations refresh: the core Bring! integration polls every 90 s, Alexa Devices every 5 min (per their source code).
 
 ## Troubleshooting
 
+At startup the sync waits until both lists are available. For details enable debug logging, either permanently:
 ```yaml
 logger:
   logs:
     custom_components.todo_sync: debug
 ```
-Then check Settings → System → Logs. When first setting up, clean up old completed items in both lists.
+or temporarily via Developer tools → Actions → `logger.set_level` with `custom_components.todo_sync: debug`. Then check Settings → System → Logs. The debug log lists all items of both lists and the decision per item. When first setting up, clean up old completed items in both lists.
 
 ## License
 MIT
@@ -105,15 +107,16 @@ Bidirektionaler Sync zweier To-do-Listen in Home Assistant, gedacht für **Bring
 
 Einträge werden über den **Namen** zugeordnet (ohne Groß-/Kleinschreibung). Die Integration speichert den Stand des letzten Syncs und vergleicht beide Listen damit. Haben beide Seiten denselben Eintrag geändert, gewinnt die auslösende Liste; beim periodischen Lauf gewinnt Liste A.
 
-Details: Listen mit Beschreibungsfeld (Bring!) nutzen es; andere (Alexa) bekommen `Name Details`, z. B. `Käse 200 g`. Beim Lesen gilt: passt der Anfang zu einem Namen der anderen Liste, ist der Rest das Detail; sonst gilt eine Zahl am Ende (mit optionaler Einheit) als Detail.
+Details: Listen mit Beschreibungsfeld (Bring!) nutzen es; andere (Alexa) bekommen `Name Details`, z. B. `Käse 200 g`. Beim Lesen gilt: Entspricht der ganze Titel genau einem bekannten Titel (Bring!-Name, Kombination `Name Details` oder Stand des letzten Syncs), wird er entsprechend getrennt (`Test bringdetails` → Name `Test`, Detail `bringdetails`). Sonst gilt nur eine Zahl am Ende (mit optionaler Einheit) als Detail (`Käse 200 g`, `Saure Sahne 2`); alles andere ist der Name.
 
 ## Einschränkungen
 
 - Umbenennen wird als Löschen + Neuanlegen synchronisiert.
-- Details ohne führende Zahl bei einem *neuen* Alexa-Eintrag („Milch fettarm") gelten als Teil des Namens.
+- Details ohne Zahl bei einem *neuen* Alexa-Eintrag („Milch fettarm") gelten als Teil des Namens.
 - „Zuletzt verwendet" von Bring! erscheint je nach Bring!-Integration als erledigt.
 - Klammern in Namen werden nicht gesondert behandelt.
+- Änderungen kommen nur so schnell an, wie die Quell-Integrationen aktualisieren: Die Bring!-Integration im Core fragt alle 90 s ab, Alexa Devices alle 5 Min (laut Quellcode).
 
 ## Fehlersuche
 
-Debug-Logging wie oben aktivieren und unter Einstellungen → System → Protokolle nach `todo_sync` suchen. Vor der Ersteinrichtung alte erledigte Einträge in beiden Listen aufräumen.
+Beim Start wartet der Sync, bis beide Listen verfügbar sind. Für Details Debug-Logging aktivieren, dauerhaft in der `configuration.yaml` (siehe oben) oder temporär unter Entwicklerwerkzeuge → Aktionen → `logger.set_level` mit `custom_components.todo_sync: debug`. Unter Einstellungen → System → Protokolle nach `todo_sync` suchen. Das Debug-Log zeigt alle Einträge beider Listen und die Entscheidung pro Eintrag. Vor der Ersteinrichtung alte erledigte Einträge in beiden Listen aufräumen.
