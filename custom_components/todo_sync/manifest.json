@@ -1,13 +1,14 @@
 {
   "domain": "todo_sync",
   "name": "To-do Sync",
-  "codeowners": ["@qu4nd"],
+  "categories": ["productivity_information.calendars_todos"],
+  "codeowners": ["@OWNER"],
   "config_flow": true,
   "dependencies": ["todo"],
-  "documentation": "https://github.com/qu4nd/ha-todo-sync",
+  "documentation": "https://github.com/OWNER/ha-todo-sync",
   "integration_type": "service",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/qu4nd/ha-todo-sync/issues",
+  "issue_tracker": "https://github.com/OWNER/ha-todo-sync/issues",
   "requirements": [],
   "version": "0.1.0"
 }
