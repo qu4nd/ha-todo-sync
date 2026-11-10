@@ -301,7 +301,14 @@ class TodoSyncer:
             ):
                 _LOGGER.debug("%r: skipped (completed history)", key)
                 continue
-            await self._apply(dest_id, dest_items, key, source)
+            try:
+                await self._apply(dest_id, dest_items, key, source)
+            except Exception:  # noqa: BLE001
+                # Keep the old state for this item so it is retried; don't block the others
+                _LOGGER.exception("Applying %r to %s failed, will retry", key, dest_id)
+                if s:
+                    new_snap[key] = s
+                continue
             if source:
                 new_snap[key] = source
 
