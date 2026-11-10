@@ -54,6 +54,7 @@ Lists that support item descriptions (Bring!) use them. Lists that don't (Alexa)
 
 - Renaming an item is synced as delete + add.
 - Details without a number on a *new* Alexa item (e.g. "Milch fettarm") are read as part of the name.
+- Names ending in a number plus word on a *new* Alexa item are split (e.g. "WD 40" → name "WD", detail "40"; "Bier 1664 Blanc" → name "Bier", detail "1664 Blanc"). Once the item exists in Bring!, the exact title is remembered and stays intact.
 - Bring!'s "recently used" is exposed by its integration as completed items; behaviour depends on that integration.
 - Parentheses in names are not specially handled.
 - Changes only arrive as fast as the source integrations refresh: the core Bring! integration polls every 90 s, Alexa Devices every 5 min (per their source code).
@@ -115,6 +116,7 @@ Details: Listen mit Beschreibungsfeld (Bring!) nutzen es; andere (Alexa) bekomme
 
 - Umbenennen wird als Löschen + Neuanlegen synchronisiert.
 - Details ohne Zahl bei einem *neuen* Alexa-Eintrag („Milch fettarm") gelten als Teil des Namens.
+- Namen, die auf Zahl plus Wort enden, werden bei einem *neuen* Alexa-Eintrag getrennt (z. B. „WD 40" → Name „WD", Detail „40"; „Bier 1664 Blanc" → Name „Bier", Detail „1664 Blanc"). Existiert der Eintrag schon in Bring!, bleibt der exakte Titel erhalten.
 - „Zuletzt verwendet" von Bring! erscheint je nach Bring!-Integration als erledigt.
 - Klammern in Namen werden nicht gesondert behandelt.
 - Änderungen kommen nur so schnell an, wie die Quell-Integrationen aktualisieren: Die Bring!-Integration im Core fragt alle 90 s ab, Alexa Devices alle 5 Min (laut Quellcode).
