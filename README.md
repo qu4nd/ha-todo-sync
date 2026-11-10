@@ -23,9 +23,11 @@ Bidirectional sync of two Home Assistant to-do lists, built for **Bring!** ⇄ *
 
 ## Installation
 
-### HACS (recommended)
-1. HACS → ⋮ → **Custom repositories** → add `https://github.com/qu4nd/ha-todo-sync` as category **Integration**.
+### Marketplace (recommended)
+1. Settings → **Marketplace** → ⋮ → **Custom repositories** → add `https://github.com/qu4nd/ha-todo-sync` as category **Integration**.
 2. Install **To-do Sync** and restart Home Assistant.
+
+The same works with HACS on Home Assistant versions before 2026.11.
 
 ### Manual
 Copy `custom_components/todo_sync` to `<config>/custom_components/todo_sync` and restart.
@@ -89,7 +91,7 @@ Bidirektionaler Sync zweier To-do-Listen in Home Assistant, gedacht für **Bring
 
 ## Installation
 
-**HACS:** HACS → ⋮ → *Benutzerdefinierte Repositories* → `https://github.com/qu4nd/ha-todo-sync` als Kategorie *Integration* hinzufügen, **To-do Sync** installieren, Home Assistant neu starten.
+**Marketplace:** Einstellungen → **Marketplace** → ⋮ → *Benutzerdefinierte Repositories* → `https://github.com/qu4nd/ha-todo-sync` als Kategorie *Integration* hinzufügen, **To-do Sync** installieren, Home Assistant neu starten. Bei Home Assistant vor 2026.11 funktioniert das gleiche über HACS.
 
 **Manuell:** `custom_components/todo_sync` nach `<config>/custom_components/todo_sync` kopieren und neu starten.
 
