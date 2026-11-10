@@ -128,7 +128,9 @@ class TodoSyncer:
         )
         return resp[entity_id]["items"]
 
-    def _parse(self, entity_id: str, raw: list[dict], known: set[str]) -> dict[str, dict]:
+    def _parse(
+        self, entity_id: str, raw: list[dict], known: dict[str, tuple[str, str]]
+    ) -> dict[str, dict]:
         items: dict[str, dict] = {}
         supports = self._supports_description(entity_id)
         for item in raw:
@@ -146,15 +148,10 @@ class TodoSyncer:
         return items
 
     @staticmethod
-    def _split_title(title: str, known: set[str]) -> tuple[str, str]:
-        """Split "Milch 3" into name and details using known names, else a trailing quantity."""
-        folded = title.casefold()
-        if folded in known:
-            return title, ""
-        prefixes = [k for k in known if folded.startswith(k + " ")]
-        if prefixes:
-            n = len(max(prefixes, key=len))
-            return title[:n], title[n:].strip()
+    def _split_title(title: str, known: dict[str, tuple[str, str]]) -> tuple[str, str]:
+        """Split "Milch 3" into name and details: exact known title first, else a trailing quantity."""
+        if (hit := known.get(title.casefold())) is not None:
+            return hit
         if m := _QTY_RE.match(title):
             return m.group(1).strip(), m.group(2).strip()
         return title, ""
@@ -213,10 +210,20 @@ class TodoSyncer:
 
     async def _sync(self, trigger: str | None) -> None:
         raw = {e: await self._fetch(e) for e in (self.a, self.b)}
-        known = set(self._snapshot)
+        # Exact "name" and "name details" titles known from description-capable lists / last sync
+        known: dict[str, tuple[str, str]] = {}
+
+        def learn(name: str, desc: str) -> None:
+            known[_key(name)] = (name, "")
+            if desc:
+                known[_key(f"{name} {desc}")] = (name, desc)
+
+        for s in self._snapshot.values():
+            learn(s["name"], s.get("description", ""))
         for e, entries in raw.items():
             if self._supports_description(e):
-                known |= {_key(i["summary"]) for i in entries}
+                for i in entries:
+                    learn(i["summary"].strip(), (i.get("description") or "").strip())
         items_a = self._parse(self.a, raw[self.a], known)
         items_b = self._parse(self.b, raw[self.b], known)
         snap = self._snapshot
