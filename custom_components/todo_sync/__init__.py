@@ -206,6 +206,10 @@ class TodoSyncer:
         items_a = self._parse(self.a, raw[self.a], known)
         items_b = self._parse(self.b, raw[self.b], known)
         snap = self._snapshot
+        _LOGGER.debug(
+            "Sync (trigger=%s): %s has %d items, %s has %d items, snapshot %d",
+            trigger, self.a, len(items_a), self.b, len(items_b), len(snap),
+        )
         new_snap: dict[str, dict] = {}
 
         for key in set(items_a) | set(items_b) | set(snap):
@@ -227,10 +231,15 @@ class TodoSyncer:
                 (a, self.b, items_b) if from_a else (b, self.a, items_a)
             )
             dest = dest_items.get(key)
+            _LOGGER.debug(
+                "%r: A=%s B=%s snapshot=%s -> %s to %s",
+                key, sa, sb, ss, "copy" if source else "delete", dest_id,
+            )
             # Completed items are history: never create or delete them on the other side
             if (source is None and dest and dest["status"] == DONE) or (
                 dest is None and source and source["status"] == DONE
             ):
+                _LOGGER.debug("%r: skipped (completed history)", key)
                 continue
             await self._apply(dest_id, dest_items, key, source)
             if source:
