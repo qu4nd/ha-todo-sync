@@ -1,0 +1,46 @@
+name: Version consistency
+
+on:
+  pull_request:
+    paths:
+      - "custom_components/todo_sync/manifest.json"
+      - ".github/workflows/version-check.yml"
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate manifest version and release tag
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          manifest = json.loads(
+              Path("custom_components/todo_sync/manifest.json").read_text(encoding="utf-8")
+          )
+          version = manifest.get("version")
+          if not isinstance(version, str) or not version.strip():
+              raise SystemExit("manifest.json must contain a non-empty string version")
+
+          if os.environ["REF_TYPE"] == "tag":
+              expected = f"v{version}"
+              actual = os.environ["REF_NAME"]
+              if actual != expected:
+                  raise SystemExit(
+                      f"Release tag {actual!r} does not match manifest version {version!r}; "
+                      f"expected {expected!r}"
+                  )
+
+          print(f"Manifest version: {version}")
+          PY
