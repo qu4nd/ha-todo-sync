@@ -1,0 +1,25 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set version in manifest from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          jq --arg v "$VERSION" '.version = $v' custom_components/todo_sync/manifest.json > m.json
+          mv m.json custom_components/todo_sync/manifest.json
+      - name: Zip integration
+        run: cd custom_components/todo_sync && zip -r ../../todo_sync.zip .
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: todo_sync.zip
+          generate_release_notes: true

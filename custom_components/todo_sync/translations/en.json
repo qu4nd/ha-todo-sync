@@ -1,0 +1,21 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "To-do Sync",
+        "description": "Choose the two to-do lists to keep in sync (title and status).",
+        "data": { "list_a": "List A", "list_b": "List B" }
+      }
+    },
+    "error": { "same_list": "Please select two different lists." },
+    "abort": { "already_configured": "This pair of lists is already configured." }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "To-do Sync",
+        "data": { "interval": "Sync interval (minutes)" }
+      }
+    }
+  }
+}
