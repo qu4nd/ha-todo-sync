@@ -83,12 +83,12 @@ actions:
   - action: homeassistant.update_entity
     data:
       entity_id:
-        - todo.list_A
-        - todo.list_B
+        - todo.[list_A]
+        - todo.[list_B]
   - delay: '00:00:02'
   - action: button.press
     target:
-      entity_id: button.ha_todo_sync_entityName_sync_now
+      entity_id: button.[ha_todo_sync_entity_sync_now]
 ```
 
 ---
