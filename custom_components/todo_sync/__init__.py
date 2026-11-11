@@ -59,6 +59,7 @@ class TodoSyncer:
         self._debounce: CALLBACK_TYPE | None = None
         self._pending_trigger: str | None = None
         self._suspect: tuple[frozenset, float] | None = None
+        self._stopped = False
 
     async def async_start(self) -> None:
         data = await self._store.async_load()
@@ -79,14 +80,18 @@ class TodoSyncer:
     def async_sync_now(self) -> None:
         self._schedule(None, 0)
 
-    @callback
-    def async_stop(self) -> None:
+    async def async_stop(self) -> None:
+        # A sync that is still running must not re-arm timers after unload
+        self._stopped = True
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
         if self._debounce:
             self._debounce()
             self._debounce = None
+        # Wait for an in-flight sync so a reloaded instance never overlaps with it
+        async with self._lock:
+            pass
 
     @callback
     def _on_change(self, event: Event) -> None:
@@ -94,6 +99,8 @@ class TodoSyncer:
 
     @callback
     def _schedule(self, trigger: str | None, delay: float) -> None:
+        if self._stopped:
+            return
         # The most recent trigger decides conflicts (the list that changed last)
         if trigger:
             self._pending_trigger = trigger
@@ -110,6 +117,8 @@ class TodoSyncer:
 
     async def _run(self, _now) -> None:
         self._debounce = None
+        if self._stopped:
+            return
         trigger, self._pending_trigger = self._pending_trigger, None
         if not self._ready():
             # Entities are not loaded yet (e.g. at startup); a state change or retry follows
@@ -117,6 +126,8 @@ class TodoSyncer:
             self._schedule(trigger, RETRY_SECONDS)
             return
         async with self._lock:
+            if self._stopped:
+                return
             try:
                 await self._sync(trigger)
             except Exception:  # noqa: BLE001
@@ -313,6 +324,7 @@ class TodoSyncer:
                 new_snap[key] = source
 
         self._snapshot = new_snap
+        # Persist even if stopped meanwhile: the changes were already applied to the lists
         await self._store.async_save({"snapshot": new_snap})
 
 
@@ -332,6 +344,6 @@ async def _async_reload(hass: HomeAssistant, entry: ConfigEntry) -> None:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if ok:
-        hass.data[DOMAIN].pop(entry.entry_id).async_stop()
+        await hass.data[DOMAIN].pop(entry.entry_id).async_stop()
     return ok
 
