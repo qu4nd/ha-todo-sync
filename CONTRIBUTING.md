@@ -47,7 +47,7 @@ A few behaviors are intentional:
 - Both lists are read before any changes are applied. A failed read must not be interpreted as an empty list.
 - Completed items are treated as provider history and are not recreated or deleted on the other list when absent there.
 - A sudden disappearance of at least five open items and more than half of the open snapshot is held back for six minutes before it is accepted.
-- Read and write failures are retried with bounded exponential backoff. Failed item writes keep their previous snapshot value so the next run can detect the outstanding change.
+- Read failures are retried with bounded exponential backoff. Failed item writes keep their previous snapshot value so a subsequent run can detect the outstanding change.
 
 Please preserve these safety properties when changing the synchronization flow. Add a regression test whenever a change affects conflict resolution, deletion handling, snapshots, or retries.
 
