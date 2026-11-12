@@ -6,7 +6,12 @@ import pytest
 from homeassistant.config_entries import ConfigEntry
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.todo_sync import RETRY_SECONDS, TodoSyncer, _TodoListReadError
+from custom_components.todo_sync import (
+    MAX_RETRY_SECONDS,
+    RETRY_SECONDS,
+    TodoSyncer,
+    _TodoListReadError,
+)
 from custom_components.todo_sync.const import CONF_LIST_A, CONF_LIST_B
 
 
@@ -152,9 +157,10 @@ async def test_failed_apply_keeps_previous_snapshot_for_retry(syncer):
     syncer._supports_description = lambda _entity_id: True
     syncer._apply = AsyncMock(side_effect=RuntimeError("temporary service error"))
 
-    await syncer._sync("todo.a")
+    write_failed = await syncer._sync("todo.a")
 
     syncer._apply.assert_awaited_once()
+    assert write_failed is True
     assert syncer._snapshot == {"milch": old}
 
 
@@ -317,18 +323,18 @@ async def test_failed_read_schedules_bounded_exponential_retry(syncer):
     await syncer._run(None)
 
     assert scheduled == [RETRY_SECONDS, RETRY_SECONDS * 2, RETRY_SECONDS * 4]
-    assert syncer._read_retry_attempt == 3
+    assert syncer._retry_attempt == 3
 
 
 @pytest.mark.asyncio
 async def test_successful_sync_resets_read_retry_backoff(syncer):
     syncer._ready = lambda: True
-    syncer._read_retry_attempt = 4
-    syncer._sync = AsyncMock()
+    syncer._retry_attempt = 4
+    syncer._sync = AsyncMock(return_value=False)
 
     await syncer._run(None)
 
-    assert syncer._read_retry_attempt == 0
+    assert syncer._retry_attempt == 0
 
 
 @pytest.mark.asyncio
@@ -340,3 +346,50 @@ async def test_failed_read_does_not_schedule_retry_after_stop(syncer):
     await syncer._run(None)
 
     syncer._schedule.assert_not_called()
+
+
+
+@pytest.mark.asyncio
+async def test_failed_write_schedules_bounded_exponential_retry(syncer):
+    syncer._ready = lambda: True
+    syncer._sync = AsyncMock(return_value=True)
+    scheduled = []
+    syncer._schedule = lambda trigger, delay: scheduled.append((trigger, delay))
+
+    for _ in range(7):
+        await syncer._run(None)
+
+    assert [delay for _, delay in scheduled] == [
+        30, 60, 120, 240, MAX_RETRY_SECONDS, MAX_RETRY_SECONDS,
+        MAX_RETRY_SECONDS,
+    ]
+    assert syncer._retry_attempt == 7
+
+
+@pytest.mark.asyncio
+async def test_failed_write_retry_preserves_newer_trigger(syncer):
+    syncer._ready = lambda: True
+    syncer._pending_trigger = "todo.a"
+    scheduled = []
+
+    async def fail_write(_trigger):
+        syncer._pending_trigger = "todo.b"
+        return True
+
+    syncer._sync = AsyncMock(side_effect=fail_write)
+    syncer._schedule = lambda trigger, delay: scheduled.append((trigger, delay))
+
+    await syncer._run(None)
+
+    assert scheduled == [("todo.b", RETRY_SECONDS)]
+
+
+@pytest.mark.asyncio
+async def test_successful_sync_resets_write_retry_backoff(syncer):
+    syncer._ready = lambda: True
+    syncer._retry_attempt = 5
+    syncer._sync = AsyncMock(return_value=False)
+
+    await syncer._run(None)
+
+    assert syncer._retry_attempt == 0

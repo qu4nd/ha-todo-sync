@@ -39,7 +39,7 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["button"]
 RETRY_SECONDS = 30
-MAX_READ_RETRY_SECONDS = 300
+MAX_RETRY_SECONDS = 300
 MASS_DELETE_MIN = 5
 CONFIRM_SECONDS = 360  # longer than the slowest source poll (Alexa: 300 s)
 DONE = "completed"
@@ -74,7 +74,7 @@ class TodoSyncer:
         self._pending_trigger: str | None = None
         self._suspect: tuple[frozenset, float] | None = None
         self._stopped = False
-        self._read_retry_attempt = 0
+        self._retry_attempt = 0
 
     async def async_start(self) -> None:
         data = await self._store.async_load()
@@ -144,26 +144,29 @@ class TodoSyncer:
             if self._stopped:
                 return
             try:
-                await self._sync(trigger)
+                write_failed = await self._sync(trigger)
             except _TodoListReadError as err:
-                self._read_retry_attempt += 1
-                delay = min(
-                    RETRY_SECONDS * 2 ** (self._read_retry_attempt - 1),
-                    MAX_READ_RETRY_SECONDS,
-                )
-                _LOGGER.exception(
-                    "Could not read %s; retrying in %s seconds",
-                    err,
-                    delay,
-                )
-                # Keep the original trigger unless a newer state change arrived
-                # while this sync was running.
-                retry_trigger = self._pending_trigger or trigger
-                self._schedule(retry_trigger, delay)
+                _LOGGER.exception("Could not read %s", err)
+                self._schedule_retry(trigger, f"Could not read {err}")
             except Exception:  # noqa: BLE001
                 _LOGGER.exception("Sync of %s and %s failed", self.a, self.b)
             else:
-                self._read_retry_attempt = 0
+                if write_failed:
+                    self._schedule_retry(trigger, "One or more list updates failed")
+                else:
+                    self._retry_attempt = 0
+
+    def _schedule_retry(self, trigger: str | None, reason: str) -> None:
+        """Schedule a bounded retry while preserving the most recent change trigger."""
+        self._retry_attempt += 1
+        delay = min(
+            RETRY_SECONDS * 2 ** (self._retry_attempt - 1),
+            MAX_RETRY_SECONDS,
+        )
+        _LOGGER.warning("%s; retrying in %s seconds", reason, delay)
+        # Keep the original trigger unless a newer state change arrived while syncing.
+        retry_trigger = self._pending_trigger or trigger
+        self._schedule(retry_trigger, delay)
 
     async def _fetch(self, entity_id: str) -> list[dict]:
         resp = await self.hass.services.async_call(
@@ -293,7 +296,7 @@ class TodoSyncer:
         )
         return True
 
-    async def _sync(self, trigger: str | None) -> None:
+    async def _sync(self, trigger: str | None) -> bool:
         # Read both lists completely before applying anything. A failed read must
         # never be interpreted as an empty list or advance the persisted snapshot.
         raw = {}
@@ -326,7 +329,7 @@ class TodoSyncer:
         # again after the confirmation window.
         if self._hold_back(self._mass_delete_suspects(items_a, items_b)):
             self._schedule(trigger, CONFIRM_SECONDS + 10)
-            return
+            return False
         snap = self._snapshot
         _LOGGER.debug(
             "Sync (trigger=%s): %s has %d items, %s has %d items, snapshot %d",
@@ -335,6 +338,7 @@ class TodoSyncer:
         _LOGGER.debug("A items: %s", {k: self._val(v) for k, v in items_a.items()})
         _LOGGER.debug("B items: %s", {k: self._val(v) for k, v in items_b.items()})
         new_snap: dict[str, dict] = {}
+        write_failed = False
 
         # Three-way diff: compare each side (A/B) with the last synced value (snapshot).
         # This distinguishes a one-sided edit from a conflict where both sides changed.
@@ -373,8 +377,9 @@ class TodoSyncer:
             try:
                 await self._apply(dest_id, dest_items, key, source)
             except Exception:  # noqa: BLE001
-                # Do not advance this item's snapshot when applying failed. The next run
-                # will see the difference again and retry, while other items can still sync.
+                # Keep the old baseline for this item so the next run retries it. Other
+                # items can still sync; _run schedules a bounded retry after this pass.
+                write_failed = True
                 _LOGGER.exception("Applying %r to %s failed, will retry", key, dest_id)
                 if s:
                     new_snap[key] = s
@@ -386,6 +391,7 @@ class TodoSyncer:
         # Persist even if unload started during this run: list changes have already been
         # applied, so the stored baseline must match them before a reloaded instance starts.
         await self._store.async_save({"snapshot": new_snap})
+        return write_failed
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
