@@ -99,7 +99,7 @@ jobs:
               midpoint = len(lines) // 2
               if lines[:midpoint] == lines[midpoint:]:
                   lines = lines[:midpoint]
-                  notes = "\\n".join(lines).strip()
+                  notes = "\n".join(lines).strip()
                   print("Removed an identical duplicated release-notes block.")
 
           if not notes:
@@ -111,7 +111,7 @@ jobs:
                   "refusing to publish potentially duplicated notes."
               )
 
-          path.write_text(notes + "\\n", encoding="utf-8")
+          path.write_text(notes + "\n", encoding="utf-8")
           PY
 
             gh release create "$tag" \
