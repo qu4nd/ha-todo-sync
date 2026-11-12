@@ -1,0 +1,28 @@
+name: Prepare release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version component to increase
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show selected version bump
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: echo "Selected version bump: $BUMP"
