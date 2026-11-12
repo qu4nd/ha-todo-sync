@@ -6,6 +6,7 @@ on:
       - "custom_components/todo_sync/manifest.json"
       - ".github/workflows/version-check.yml"
       - ".github/workflows/release.yml"
+  workflow_dispatch:
 
 jobs:
   check-version:
