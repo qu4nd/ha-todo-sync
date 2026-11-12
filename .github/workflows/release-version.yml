@@ -19,10 +19,11 @@ permissions:
 
 jobs:
   prepare:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Bump manifest version
         id: version
@@ -80,11 +81,11 @@ jobs:
           body="$(cat <<EOF
           ## Release preparation
 
-          - Bump \`custom_components/todo_sync/manifest.json\` to **${VERSION}**
+          - Bump `custom_components/todo_sync/manifest.json` to **${VERSION}**
           - No functional code changes
 
           After merging this PR, create the GitHub release with the matching tag:
-          \`v${VERSION}\`
+          `v${VERSION}`
 
           The normal pull-request checks run automatically.
           EOF
