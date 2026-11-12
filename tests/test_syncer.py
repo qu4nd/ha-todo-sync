@@ -79,7 +79,7 @@ async def test_new_item_on_a_is_applied_to_b(syncer):
 
     syncer._apply.assert_awaited_once_with("todo.b", {}, "milch", source)
     assert syncer._snapshot == {"milch": source}
-    syncer._store.async_save.assert_awaited_once_with({"snapshot": {"milch": source}})
+    syncer._store.async_save.assert_awaited_once_with({"snapshot": {"milch": source}, "status": syncer._status})
 
 
 @pytest.mark.asyncio
