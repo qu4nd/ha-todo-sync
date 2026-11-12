@@ -38,7 +38,7 @@ jobs:
           path = Path("custom_components/todo_sync/manifest.json")
           content = path.read_text(encoding="utf-8")
           match = re.search(
-              r'(?m)^([ \t]*"version"[ \t]*:[ \t]*")([0-9]+)\.([0-9]+)\.([0-9]+)(")',
+              r'(?m)^([ \\t]*"version"[ \\t]*:[ \\t]*")([0-9]+)\\.([0-9]+)\\.([0-9]+)(")',
               content,
           )
           if not match:
@@ -66,7 +66,7 @@ jobs:
           json.loads(updated)
           path.write_text(updated, encoding="utf-8")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"new_version={version}\n")
+              output.write(f"new_version={version}\\n")
           print(f"Prepared version {version}")
           PY
 
@@ -77,15 +77,18 @@ jobs:
         run: |
           branch="automation/release-v${VERSION}"
           title="chore: prepare release v${VERSION}"
-          body="## Release preparation
+          body="$(cat <<EOF
+          ## Release preparation
 
-          - Bump `custom_components/todo_sync/manifest.json` to **${VERSION}**
+          - Bump \`custom_components/todo_sync/manifest.json\` to **${VERSION}**
           - No functional code changes
 
           After merging this PR, create the GitHub release with the matching tag:
-          `v${VERSION}`
+          \`v${VERSION}\`
 
-          The normal pull-request checks run automatically."
+          The normal pull-request checks run automatically.
+          EOF
+          )"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
