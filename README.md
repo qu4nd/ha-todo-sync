@@ -25,6 +25,7 @@
 * ⚖️ **Smart Quantity & Details Bridging:** Automatically translates between lists *with* item descriptions (e.g., **Bring!**) and lists *without* them (e.g., **Alexa**).
 * ⚡ **Event-Driven + Periodic:** Reacts to Home Assistant list-change events (with a `3 s` debounce) and runs a configurable periodic fallback (`1–1440 min`, default `5 min`). End-to-end sync speed also depends on how quickly each provider updates its Home Assistant entity.
 * 🔘 **Ad-Hoc Sync Button:** Exposes a `Sync now` button entity per list pair for dashboards or custom automations.
+* 📊 **Synchronization Status:** Exposes a diagnostic sensor per list pair with the current sync state, last successful sync, last error timestamp, and number of changed items.
 * 🛡️ **Mass-Delete Safety Brake:** Protects your lists against faulty cloud reads. If 5 or more open items (and more than half of the list) vanish at once, the sync holds back for `6 minutes` to verify the deletion isn't a temporary API glitch.
 * 🕓 **Clean History Handling:** Completed items (such as Bring!'s *"recently used"* history) are never created or deleted on the opposing list—only status changes of mutually existing items are synced.
 * 🌐 **100% UI Configured:** Full Config Flow & Options Flow support with English and German translations. Zero YAML required.
@@ -84,6 +85,28 @@ Copy the `custom_components/todo_sync` folder into your Home Assistant `<config>
 
 > [!TIP]
 > **First-Time Setup:** Clean up old completed items in both lists before setting up the integration for the cleanest initial snapshot.
+
+---
+
+## 📊 Synchronization Status
+
+To-do Sync creates a diagnostic sensor for each configured list pair. The sensor is available alongside the integration's other entities and shows the latest synchronization state:
+
+| State | Meaning |
+| :--- | :--- |
+| `idle` | No synchronization is currently running (for example, while a mass deletion is being verified). |
+| `syncing` | A synchronization run is in progress. |
+| `success` | The latest run completed successfully. |
+| `error` | The latest run encountered a read or write error. |
+
+The sensor also exposes these attributes:
+
+- `last_success`: Timestamp of the last fully successful synchronization.
+- `last_error`: Timestamp of the latest synchronization error.
+- `synced_items`: Number of items successfully created, updated, or removed in the latest run.
+- `last_error_type`: Technical error category (for example, `WriteError` or `TodoListReadError`).
+
+Status history is stored locally and restored after a Home Assistant restart. A run that was interrupted by a restart is restored as `idle`, not as actively syncing. The sensor does not expose list entity IDs, item names, descriptions, or task contents.
 
 ---
 
