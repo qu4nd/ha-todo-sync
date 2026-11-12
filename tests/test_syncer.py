@@ -307,6 +307,7 @@ async def test_failed_list_read_keeps_snapshot_and_does_not_apply_changes(
 
 @pytest.mark.asyncio
 async def test_failed_read_schedules_bounded_exponential_retry(syncer):
+    syncer._ready = lambda: True
     syncer._sync = AsyncMock(side_effect=_TodoListReadError("todo.b"))
     syncer._schedule = lambda _trigger, delay: scheduled.append(delay)
     scheduled = []
@@ -321,6 +322,7 @@ async def test_failed_read_schedules_bounded_exponential_retry(syncer):
 
 @pytest.mark.asyncio
 async def test_successful_sync_resets_read_retry_backoff(syncer):
+    syncer._ready = lambda: True
     syncer._read_retry_attempt = 4
     syncer._sync = AsyncMock()
 
