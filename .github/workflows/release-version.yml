@@ -77,15 +77,18 @@ jobs:
         run: |
           branch="automation/release-v${VERSION}"
           title="chore: prepare release v${VERSION}"
-          body="## Release preparation
+          body="$(cat <<EOF
+          ## Release preparation
 
-          - Bump `custom_components/todo_sync/manifest.json` to **${VERSION}**
+          - Bump \`custom_components/todo_sync/manifest.json\` to **${VERSION}**
           - No functional code changes
 
           After merging this PR, create the GitHub release with the matching tag:
-          `v${VERSION}`
+          \`v${VERSION}\`
 
-          The normal pull-request checks run automatically."
+          The normal pull-request checks run automatically.
+          EOF
+          )"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
