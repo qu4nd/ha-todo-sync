@@ -71,20 +71,31 @@ jobs:
           PY
 
       - name: Create version bump pull request
-        uses: peter-evans/create-pull-request@v7
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: automation/release-v${{ steps.version.outputs.new_version }}
-          delete-branch: true
-          commit-message: "chore: bump version to v${{ steps.version.outputs.new_version }}"
-          title: "chore: prepare release v${{ steps.version.outputs.new_version }}"
-          body: |
-            ## Release preparation
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.new_version }}
+        run: |
+          branch="automation/release-v${VERSION}"
+          title="chore: prepare release v${VERSION}"
+          body="## Release preparation
 
-            - Bump `custom_components/todo_sync/manifest.json` to **${{ steps.version.outputs.new_version }}**
-            - No functional code changes
+          - Bump `custom_components/todo_sync/manifest.json` to **${VERSION}**
+          - No functional code changes
 
-            After merging this PR, create the GitHub release with the matching tag:
-            `v${{ steps.version.outputs.new_version }}`
+          After merging this PR, create the GitHub release with the matching tag:
+          `v${VERSION}`
 
-            The normal pull-request checks run automatically.
+          The normal pull-request checks run automatically."
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$branch"
+          git add custom_components/todo_sync/manifest.json
+          git commit -m "chore: bump version to v${VERSION}"
+          git push --force origin "$branch"
+
+          if gh pr view "$branch" >/dev/null 2>&1; then
+            gh pr edit "$branch" --title "$title" --body "$body"
+          else
+            gh pr create --base main --head "$branch" --title "$title" --body "$body"
+          fi
