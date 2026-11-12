@@ -1,0 +1,48 @@
+name: Publish release
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: >-
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'automation/release-v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out merged commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - name: Create GitHub release and tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          version="$(python -c 'import json; print(json.load(open("custom_components/todo_sync/manifest.json", encoding="utf-8"))["version"])')"
+          tag="v${version}"
+          expected_branch="automation/release-${tag}"
+
+          if [[ "$HEAD_BRANCH" != "$expected_branch" ]]; then
+            echo "Unexpected release branch: $HEAD_BRANCH (expected $expected_branch)"
+            exit 1
+          fi
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; nothing to do."
+            exit 0
+          fi
+
+          gh release create "$tag" \
+            --target "$MERGE_SHA" \
+            --title "$tag" \
+            --generate-notes
