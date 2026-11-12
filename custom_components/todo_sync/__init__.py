@@ -305,7 +305,7 @@ class TodoSyncer:
     async def _call(self, service: str, data: dict) -> None:
         await self.hass.services.async_call("todo", service, data, blocking=True)
 
-    async def _apply(self, entity_id: str, current: dict, key: str, target: dict | None) -> None:
+    async def _apply(self, entity_id: str, current: dict, key: str, target: dict | None) -> bool:
         existing = current.get(key)
         # A missing target means the source side deleted this item. Remove it only
         # when it exists on the destination; otherwise there is nothing to apply.
@@ -317,6 +317,7 @@ class TodoSyncer:
                 return True
             return False
         supports = self._supports_description(entity_id)
+        created = existing is None
         if existing is None:
             # Create the item first. Some providers need a follow-up update to set
             # its status, so the common update logic below also handles new items.
@@ -341,7 +342,7 @@ class TodoSyncer:
                 data["rename"] = self._title(
                     entity_id, existing["name"], target["description"]
                 )
-        changed = existing is None or len(data) > 2
+        changed = created or len(data) > 2
         if len(data) > 2:
             await self._call("update_item", data)
         return changed
