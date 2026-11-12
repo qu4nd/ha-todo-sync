@@ -156,8 +156,10 @@ class TodoSyncer:
                     err,
                     delay,
                 )
-                # Keep any newer state-change trigger that arrived during this run.
-                self._schedule(None, delay)
+                # Keep the original trigger unless a newer state change arrived
+                # while this sync was running.
+                retry_trigger = self._pending_trigger or trigger
+                self._schedule(retry_trigger, delay)
             except Exception:  # noqa: BLE001
                 _LOGGER.exception("Sync of %s and %s failed", self.a, self.b)
             else:
