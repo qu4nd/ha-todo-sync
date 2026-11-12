@@ -39,7 +39,7 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["button"]
 RETRY_SECONDS = 30
-MAX_READ_RETRY_SECONDS = 300
+MAX_RETRY_SECONDS = 300
 MASS_DELETE_MIN = 5
 CONFIRM_SECONDS = 360  # longer than the slowest source poll (Alexa: 300 s)
 DONE = "completed"
@@ -160,7 +160,7 @@ class TodoSyncer:
         self._retry_attempt += 1
         delay = min(
             RETRY_SECONDS * 2 ** (self._retry_attempt - 1),
-            MAX_READ_RETRY_SECONDS,
+            MAX_RETRY_SECONDS,
         )
         _LOGGER.warning("%s; retrying in %s seconds", reason, delay)
         # Keep the original trigger unless a newer state change arrived while syncing.
