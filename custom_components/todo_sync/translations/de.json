@@ -4,16 +4,28 @@
       "user": {
         "title": "To-do Sync",
         "description": "Wähle die zwei To-do-Listen, die synchron gehalten werden sollen (Titel und Status).",
-        "data": { "list_a": "Liste A", "list_b": "Liste B" }
+        "data": {
+          "list_a": "Liste A",
+          "list_b": "Liste B"
+        }
       }
     },
-    "error": { "same_list": "Bitte zwei verschiedene Listen wählen." },
-    "abort": { "already_configured": "Dieses Listenpaar ist bereits eingerichtet." }
+    "error": {
+      "same_list": "Bitte zwei verschiedene Listen wählen."
+    },
+    "abort": {
+      "already_configured": "Dieses Listenpaar ist bereits eingerichtet."
+    }
   },
   "entity": {
     "sensor": {
       "sync_status": {
         "name": "Synchronisierungsstatus"
+      }
+    },
+    "button": {
+      "sync_now": {
+        "name": "Jetzt synchronisieren"
       }
     }
   },
@@ -21,7 +33,9 @@
     "step": {
       "init": {
         "title": "To-do Sync",
-        "data": { "interval": "Sync-Intervall (Minuten)" }
+        "data": {
+          "interval": "Sync-Intervall (Minuten)"
+        }
       }
     }
   }
