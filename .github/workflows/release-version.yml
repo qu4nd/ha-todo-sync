@@ -25,4 +25,5 @@ jobs:
       - name: Show selected version bump
         env:
           BUMP: ${{ inputs.bump }}
-        run: echo "Selected version bump: $BUMP"
+        run: |
+          echo "Selected version bump: $BUMP"
