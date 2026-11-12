@@ -8,13 +8,13 @@ The project tests run with Python 3.13 and Home Assistant's custom-component tes
 
 1. Clone the repository and enter its directory.
 2. Create and activate a virtual environment.
-3. Install the test dependencies:
+3. Install `uv` and the test dependencies:
 
    ```bash
    python -m venv .venv
    source .venv/bin/activate
-   python -m pip install --upgrade pip
-   pip install -r requirements_test.txt
+   python -m pip install uv
+   uv pip install -r requirements_test.txt
    ```
 
    On Windows, activate the environment with `.venv\\Scripts\\activate`.
@@ -25,7 +25,7 @@ The project tests run with Python 3.13 and Home Assistant's custom-component tes
    PYTHONPATH=. pytest -q
    ```
 
-The same command is used by the GitHub Actions validation workflow. The workflow also runs Home Assistant's hassfest validation and HACS validation.
+The same test command is used by the GitHub Actions validation workflow. The workflow installs the test dependencies with `uv` and also runs Home Assistant's hassfest validation and HACS validation.
 
 ## Project structure
 
