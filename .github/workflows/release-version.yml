@@ -27,7 +27,7 @@ jobs:
       - name: Bump manifest version
         id: version
         env:
-          BUMP: \${{ inputs.bump }}
+          BUMP: ${{ inputs.bump }}
         run: |
           python - <<'PY'
           import json
@@ -72,19 +72,19 @@ jobs:
 
       - name: Create version bump pull request
         env:
-          GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
-          VERSION: \${{ steps.version.outputs.new_version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.new_version }}
         run: |
-          branch="automation/release-v\${VERSION}"
-          title="chore: prepare release v\${VERSION}"
+          branch="automation/release-v${VERSION}"
+          title="chore: prepare release v${VERSION}"
           body="$(cat <<EOF
           ## Release preparation
 
-          - Bump \`custom_components/todo_sync/manifest.json\` to **\${VERSION}**
+          - Bump \`custom_components/todo_sync/manifest.json\` to **${VERSION}**
           - No functional code changes
 
           After merging this PR, create the GitHub release with the matching tag:
-          \`v\${VERSION}\`
+          \`v${VERSION}\`
 
           The normal pull-request checks run automatically.
           EOF
@@ -94,7 +94,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -C "$branch"
           git add custom_components/todo_sync/manifest.json
-          git commit -m "chore: bump version to v\${VERSION}"
+          git commit -m "chore: bump version to v${VERSION}"
           git push --force origin "$branch"
 
           if gh pr view "$branch" >/dev/null 2>&1; then
