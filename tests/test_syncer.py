@@ -287,16 +287,14 @@ async def test_failed_list_read_keeps_snapshot_and_does_not_apply_changes(
 ):
     old = item("Milch")
     syncer._snapshot = {"milch": old}
-    syncer._fetch = AsyncMock(
-        side_effect=[
-            [] if failed_entity == "todo.a" else [
-                {"summary": "Milch", "status": "needs_action", "description": ""}
-            ],
-            RuntimeError("temporary provider error")
-            if failed_entity == "todo.b"
-            else [],
+    async def fetch(entity_id):
+        if entity_id == failed_entity:
+            raise RuntimeError("temporary provider error")
+        return [
+            {"summary": "Milch", "status": "needs_action", "description": ""}
         ]
-    )
+
+    syncer._fetch = AsyncMock(side_effect=fetch)
     syncer._apply = AsyncMock()
 
     with pytest.raises(_TodoListReadError, match=failed_entity):
