@@ -19,7 +19,7 @@ async def async_setup_entry(
 
 class SyncNowButton(ButtonEntity):
     _attr_has_entity_name = True
-    _attr_name = "Sync now"
+    _attr_translation_key = "sync_now"
     _attr_icon = "mdi:sync"
 
     def __init__(self, entry: ConfigEntry, syncer) -> None:
