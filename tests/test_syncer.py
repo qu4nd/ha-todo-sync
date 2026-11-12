@@ -6,7 +6,7 @@ import pytest
 from homeassistant.config_entries import ConfigEntry
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.todo_sync import TodoSyncer
+from custom_components.todo_sync import RETRY_SECONDS, TodoSyncer, _TodoListReadError
 from custom_components.todo_sync.const import CONF_LIST_A, CONF_LIST_B
 
 
@@ -277,3 +277,66 @@ def test_changed_mass_delete_result_restarts_confirmation(syncer):
         assert syncer._hold_back(second) is True
 
     assert syncer._suspect == (second, 200.0)
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failed_entity", ["todo.a", "todo.b"])
+async def test_failed_list_read_keeps_snapshot_and_does_not_apply_changes(
+    syncer, failed_entity
+):
+    old = item("Milch")
+    syncer._snapshot = {"milch": old}
+    async def fetch(entity_id):
+        if entity_id == failed_entity:
+            raise RuntimeError("temporary provider error")
+        return [
+            {"summary": "Milch", "status": "needs_action", "description": ""}
+        ]
+
+    syncer._fetch = AsyncMock(side_effect=fetch)
+    syncer._apply = AsyncMock()
+
+    with pytest.raises(_TodoListReadError, match=failed_entity):
+        await syncer._sync("todo.a")
+
+    assert syncer._snapshot == {"milch": old}
+    syncer._apply.assert_not_awaited()
+    syncer._store.async_save.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_failed_read_schedules_bounded_exponential_retry(syncer):
+    syncer._ready = lambda: True
+    syncer._sync = AsyncMock(side_effect=_TodoListReadError("todo.b"))
+    syncer._schedule = lambda _trigger, delay: scheduled.append(delay)
+    scheduled = []
+
+    await syncer._run(None)
+    await syncer._run(None)
+    await syncer._run(None)
+
+    assert scheduled == [RETRY_SECONDS, RETRY_SECONDS * 2, RETRY_SECONDS * 4]
+    assert syncer._read_retry_attempt == 3
+
+
+@pytest.mark.asyncio
+async def test_successful_sync_resets_read_retry_backoff(syncer):
+    syncer._ready = lambda: True
+    syncer._read_retry_attempt = 4
+    syncer._sync = AsyncMock()
+
+    await syncer._run(None)
+
+    assert syncer._read_retry_attempt == 0
+
+
+@pytest.mark.asyncio
+async def test_failed_read_does_not_schedule_retry_after_stop(syncer):
+    syncer._stopped = True
+    syncer._sync = AsyncMock(side_effect=_TodoListReadError("todo.a"))
+    syncer._schedule = AsyncMock()
+
+    await syncer._run(None)
+
+    syncer._schedule.assert_not_called()

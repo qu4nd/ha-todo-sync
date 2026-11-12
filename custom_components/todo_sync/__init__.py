@@ -39,6 +39,7 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["button"]
 RETRY_SECONDS = 30
+MAX_READ_RETRY_SECONDS = 300
 MASS_DELETE_MIN = 5
 CONFIRM_SECONDS = 360  # longer than the slowest source poll (Alexa: 300 s)
 DONE = "completed"
@@ -48,6 +49,10 @@ _QTY_RE = re.compile(r"^(.+?)\s+(\d+(?:[.,]\d+)?(?:\s*[^\W\d_]+\.?)?)$")
 
 def _key(summary: str) -> str:
     return summary.strip().casefold()
+
+
+class _TodoListReadError(Exception):
+    """Raised when fetching either source list fails before sync changes are applied."""
 
 
 class TodoSyncer:
@@ -69,6 +74,7 @@ class TodoSyncer:
         self._pending_trigger: str | None = None
         self._suspect: tuple[frozenset, float] | None = None
         self._stopped = False
+        self._read_retry_attempt = 0
 
     async def async_start(self) -> None:
         data = await self._store.async_load()
@@ -139,8 +145,25 @@ class TodoSyncer:
                 return
             try:
                 await self._sync(trigger)
+            except _TodoListReadError as err:
+                self._read_retry_attempt += 1
+                delay = min(
+                    RETRY_SECONDS * 2 ** (self._read_retry_attempt - 1),
+                    MAX_READ_RETRY_SECONDS,
+                )
+                _LOGGER.exception(
+                    "Could not read %s; retrying in %s seconds",
+                    err,
+                    delay,
+                )
+                # Keep the original trigger unless a newer state change arrived
+                # while this sync was running.
+                retry_trigger = self._pending_trigger or trigger
+                self._schedule(retry_trigger, delay)
             except Exception:  # noqa: BLE001
                 _LOGGER.exception("Sync of %s and %s failed", self.a, self.b)
+            else:
+                self._read_retry_attempt = 0
 
     async def _fetch(self, entity_id: str) -> list[dict]:
         resp = await self.hass.services.async_call(
@@ -271,7 +294,14 @@ class TodoSyncer:
         return True
 
     async def _sync(self, trigger: str | None) -> None:
-        raw = {e: await self._fetch(e) for e in (self.a, self.b)}
+        # Read both lists completely before applying anything. A failed read must
+        # never be interpreted as an empty list or advance the persisted snapshot.
+        raw = {}
+        for entity_id in (self.a, self.b):
+            try:
+                raw[entity_id] = await self._fetch(entity_id)
+            except Exception as err:  # noqa: BLE001
+                raise _TodoListReadError(entity_id) from err
         # Exact "name" and "name details" titles known from description-capable lists / last sync
         # Lists without description support encode details in the title. Remember exact
         # name/details pairs from the snapshot and capable lists before parsing either side,
