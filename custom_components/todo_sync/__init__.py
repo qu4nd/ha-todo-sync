@@ -1,4 +1,10 @@
-"""Bidirectional sync between two Home Assistant to-do lists (title + status)."""
+"""Bidirectional sync between two Home Assistant to-do lists (title + status).
+
+The integration is intentionally centered around TodoSyncer: it reads both lists,
+compares them with the last successfully synchronized snapshot, applies the
+resulting changes, and persists the new snapshot. Keeping that flow in one place
+makes conflict handling and retries consistent for every supported to-do provider.
+"""
 
 from __future__ import annotations
 
@@ -54,9 +60,12 @@ class TodoSyncer:
         self.interval: int = int(entry.options.get(CONF_INTERVAL, SCAN_INTERVAL_MINUTES))
         self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
         self._lock = asyncio.Lock()
-        self._snapshot: dict[str, dict] = {}  # key -> {"name", "status"}
+        # Last successfully synchronized state, keyed by normalized item name.
+        # Comparing both live lists with this baseline lets us tell which side changed.
+        self._snapshot: dict[str, dict] = {}
         self._unsubs: list[CALLBACK_TYPE] = []
         self._debounce: CALLBACK_TYPE | None = None
+        # Remember the latest list that caused a run; it breaks simultaneous-change ties.
         self._pending_trigger: str | None = None
         self._suspect: tuple[frozenset, float] | None = None
         self._stopped = False
@@ -165,6 +174,8 @@ class TodoSyncer:
     @staticmethod
     def _split_title(title: str, known: dict[str, tuple[str, str]]) -> tuple[str, str]:
         """Split "Milch 3" into name and details: exact known title first, else a trailing quantity."""
+        # Prefer an exact pair learned from the other list or the previous snapshot.
+        # Only fall back to the quantity pattern for titles we have never seen before.
         if (hit := known.get(title.casefold())) is not None:
             return hit
         if m := _QTY_RE.match(title):
@@ -191,6 +202,8 @@ class TodoSyncer:
 
     async def _apply(self, entity_id: str, current: dict, key: str, target: dict | None) -> None:
         existing = current.get(key)
+        # A missing target means the source side deleted this item. Remove it only
+        # when it exists on the destination; otherwise there is nothing to apply.
         if target is None:
             if existing:
                 await self._call(
@@ -199,6 +212,8 @@ class TodoSyncer:
             return
         supports = self._supports_description(entity_id)
         if existing is None:
+            # Create the item first. Some providers need a follow-up update to set
+            # its status, so the common update logic below also handles new items.
             title = self._title(entity_id, target["name"], target["description"])
             data = {"entity_id": entity_id, "item": title}
             if supports and target["description"]:
@@ -227,6 +242,8 @@ class TodoSyncer:
         self, items_a: dict[str, dict], items_b: dict[str, dict]
     ) -> frozenset:
         """Return (list, key) pairs if a list lost most open items at once (likely a faulty read)."""
+        # Only compare open items: completed entries are history and are not part
+        # of the deletion safety check.
         open_snap = {k for k, s in self._snapshot.items() if s["status"] == OPEN}
         suspects: set = set()
         for entity_id, items in ((self.a, items_a), (self.b, items_b)):
@@ -256,6 +273,9 @@ class TodoSyncer:
     async def _sync(self, trigger: str | None) -> None:
         raw = {e: await self._fetch(e) for e in (self.a, self.b)}
         # Exact "name" and "name details" titles known from description-capable lists / last sync
+        # Lists without description support encode details in the title. Remember exact
+        # name/details pairs from the snapshot and capable lists before parsing either side,
+        # so a previously known title is not split differently on the other side.
         known: dict[str, tuple[str, str]] = {}
 
         def learn(name: str, desc: str) -> None:
@@ -271,6 +291,9 @@ class TodoSyncer:
                     learn(i["summary"].strip(), (i.get("description") or "").strip())
         items_a = self._parse(self.a, raw[self.a], known)
         items_b = self._parse(self.b, raw[self.b], known)
+        # A sudden disappearance of most open items can be a transient provider/API
+        # read failure. Do not propagate those deletions until the same result is seen
+        # again after the confirmation window.
         if self._hold_back(self._mass_delete_suspects(items_a, items_b)):
             self._schedule(trigger, CONFIRM_SECONDS + 10)
             return
@@ -283,6 +306,8 @@ class TodoSyncer:
         _LOGGER.debug("B items: %s", {k: self._val(v) for k, v in items_b.items()})
         new_snap: dict[str, dict] = {}
 
+        # Three-way diff: compare each side (A/B) with the last synced value (snapshot).
+        # This distinguishes a one-sided edit from a conflict where both sides changed.
         for key in set(items_a) | set(items_b) | set(snap):
             a, b, s = items_a.get(key), items_b.get(key), snap.get(key)
             sa, sb, ss = (self._val(x) for x in (a, b, s))
@@ -294,7 +319,9 @@ class TodoSyncer:
 
             changed_a, changed_b = sa != ss, sb != ss
             if changed_a and changed_b:
-                from_a = trigger != self.b  # conflict: triggering side wins, default A
+                # Both sides changed since the snapshot. Prefer the side that triggered
+                # this run; periodic runs have no trigger and therefore default to A.
+                from_a = trigger != self.b
             else:
                 from_a = changed_a
 
@@ -306,7 +333,8 @@ class TodoSyncer:
                 "%r: A=%s B=%s snapshot=%s -> %s to %s",
                 key, sa, sb, ss, "copy" if source else "delete", dest_id,
             )
-            # Completed items are history: never create or delete them on the other side
+            # Completed entries are provider history, not active list content. Avoid
+            # recreating or deleting them on the opposite side when one side omits them.
             if (source is None and dest and dest["status"] == DONE) or (
                 dest is None and source and source["status"] == DONE
             ):
@@ -315,7 +343,8 @@ class TodoSyncer:
             try:
                 await self._apply(dest_id, dest_items, key, source)
             except Exception:  # noqa: BLE001
-                # Keep the old state for this item so it is retried; don't block the others
+                # Do not advance this item's snapshot when applying failed. The next run
+                # will see the difference again and retry, while other items can still sync.
                 _LOGGER.exception("Applying %r to %s failed, will retry", key, dest_id)
                 if s:
                     new_snap[key] = s
@@ -324,7 +353,8 @@ class TodoSyncer:
                 new_snap[key] = source
 
         self._snapshot = new_snap
-        # Persist even if stopped meanwhile: the changes were already applied to the lists
+        # Persist even if unload started during this run: list changes have already been
+        # applied, so the stored baseline must match them before a reloaded instance starts.
         await self._store.async_save({"snapshot": new_snap})
 
 
