@@ -47,7 +47,7 @@ A few behaviors are intentional:
 - Both lists are read before any changes are applied. A failed read must not be interpreted as an empty list.
 - Completed items are treated as provider history and are not recreated or deleted on the other list when absent there.
 - A sudden disappearance of at least five open items and more than half of the open snapshot is held back for six minutes before it is accepted.
-- Read failures are retried with bounded exponential backoff. Failed item writes keep their previous snapshot value so a subsequent run can detect the outstanding change.
+- Read and write failures are retried with bounded exponential backoff, starting at 30 seconds and capped at 300 seconds. Failed item writes keep their previous snapshot value so the next run can detect and retry the outstanding change.
 
 Please preserve these safety properties when changing the synchronization flow. Add a regression test whenever a change affects conflict resolution, deletion handling, snapshots, or retries.
 
@@ -60,21 +60,4 @@ Please preserve these safety properties when changing the synchronization flow. 
 - Add or adjust tests for behavior changes. Do not weaken an assertion merely to make a failing test pass; first verify that the test exercises the intended code path.
 - Run `PYTHONPATH=. pytest -q` before opening a pull request.
 
-Pull requests should explain the user-visible effect, the reason for the change, and the tests or validations performed. If a change is based on a provider-specific behavior, include the provider and a reproducible description.
-
-## Release process
-
-Releases are created from version tags:
-
-1. Update the `version` field in `custom_components/todo_sync/manifest.json`.
-2. Commit and merge the version change into `main`.
-3. Create and push the matching tag, including the leading `v` (for example, manifest version `0.1.17` uses tag `v0.1.17`):
-
-   ```bash
-   git tag v0.1.17
-   git push origin v0.1.17
-   ```
-
-4. The release workflow checks that the tag matches the manifest version, packages the integration, and creates the GitHub release.
-
-Do not create a release tag for a version that has not been merged into `main`.
+Contributions are welcome through pull requests. Please use a pull request to propose any change; direct commits to the project are not part of the contribution workflow. Each pull request should address one focused change, explain the motivation and user-visible impact, and describe the tests or validations performed. If a change is based on provider-specific behavior, include the provider and a reproducible description. Submitting a pull request does not guarantee that it will be accepted or merged.
