@@ -79,17 +79,15 @@ jobs:
           fi
 
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release $tag already exists; nothing to do."
-            exit 0
-          fi
+            echo "Release $tag already exists; will ensure the integration ZIP is attached."
+          else
+            # Generate notes explicitly, then validate them before publishing.
+            gh api --method POST "repos/${REPOSITORY}/releases/generate-notes" \
+              -f tag_name="$tag" \
+              -f target_commitish="$MERGE_SHA" \
+              --jq .body > generated-notes.md
 
-          # Generate notes explicitly, then validate them before publishing.
-          gh api --method POST "repos/${REPOSITORY}/releases/generate-notes" \
-            -f tag_name="$tag" \
-            -f target_commitish="$MERGE_SHA" \
-            --jq .body > generated-notes.md
-
-          python - <<'PY'
+            python - <<'PY'
           from pathlib import Path
 
           path = Path("generated-notes.md")
@@ -116,7 +114,14 @@ jobs:
           path.write_text(notes + "\n", encoding="utf-8")
           PY
 
-          gh release create "$tag" \
-            --target "$MERGE_SHA" \
-            --title "$tag" \
-            --notes-file generated-notes.md
+            gh release create "$tag" \
+              --target "$MERGE_SHA" \
+              --title "$tag" \
+              --notes-file generated-notes.md
+          fi
+
+          # Keep asset publication in this workflow to avoid a tag-triggered race.
+          cd custom_components/todo_sync
+          zip -r ../../todo_sync.zip .
+          cd ../..
+          gh release upload "$tag" todo_sync.zip --clobber
