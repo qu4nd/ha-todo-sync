@@ -12,7 +12,7 @@ import asyncio
 import logging
 import re
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from homeassistant.components.todo import TodoListEntityFeature
 from homeassistant.config_entries import ConfigEntry
@@ -37,7 +37,7 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["button"]
+PLATFORMS = ["button", "sensor"]
 RETRY_SECONDS = 30
 MAX_RETRY_SECONDS = 300
 MASS_DELETE_MIN = 5
@@ -75,10 +75,28 @@ class TodoSyncer:
         self._suspect: tuple[frozenset, float] | None = None
         self._stopped = False
         self._retry_attempt = 0
+        self._last_synced_items = 0
+        self._sync_deferred = False
+        self._status = {
+            "state": "idle",
+            "last_success": None,
+            "last_error": None,
+            "synced_items": 0,
+            "last_error_type": None,
+        }
+        self._status_listeners = []
 
     async def async_start(self) -> None:
         data = await self._store.async_load()
         self._snapshot = (data or {}).get("snapshot", {})
+        stored_status = (data or {}).get("status", {})
+        self._status.update(
+            {key: stored_status[key] for key in self._status if key in stored_status}
+        )
+        # A process cannot still be syncing after Home Assistant has restarted.
+        if self._status["state"] == "syncing":
+            self._status["state"] = "idle"
+        await self._save_store()
         self._unsubs.append(
             async_track_state_change_event(self.hass, [self.a, self.b], self._on_change)
         )
@@ -90,6 +108,43 @@ class TodoSyncer:
             )
         )
         self._schedule(None, 0)
+
+    @property
+    def status(self) -> str:
+        return self._status["state"]
+
+    @property
+    def status_attributes(self) -> dict:
+        return {key: value for key, value in self._status.items() if key != "state"}
+
+    @callback
+    def async_add_status_listener(self, listener):
+        self._status_listeners.append(listener)
+
+        @callback
+        def remove_listener():
+            self._status_listeners.remove(listener)
+
+        return remove_listener
+
+    @callback
+    def _notify_status(self) -> None:
+        for listener in tuple(self._status_listeners):
+            listener()
+
+    async def _save_store(self) -> None:
+        await self._store.async_save(
+            {"snapshot": self._snapshot, "status": dict(self._status)}
+        )
+
+    async def _set_status(self, state: str, **attributes) -> None:
+        self._status.update(state=state, **attributes)
+        self._notify_status()
+        await self._save_store()
+
+    @staticmethod
+    def _now() -> str:
+        return datetime.now(timezone.utc).isoformat()
 
     @callback
     def async_sync_now(self) -> None:
@@ -143,18 +198,46 @@ class TodoSyncer:
         async with self._lock:
             if self._stopped:
                 return
+            self._last_synced_items = 0
+            await self._set_status("syncing", synced_items=0)
             try:
                 write_failed = await self._sync(trigger)
-            except _TodoListReadError as err:
-                _LOGGER.exception("Could not read %s", err)
-                self._schedule_retry(trigger, f"Could not read {err}")
-            except Exception:  # noqa: BLE001
+            except _TodoListReadError:
+                _LOGGER.exception("Could not read a to-do list")
+                await self._set_status(
+                    "error",
+                    last_error=self._now(),
+                    last_error_type="TodoListReadError",
+                    synced_items=0,
+                )
+                self._schedule_retry(trigger, "Could not read a to-do list")
+            except Exception as err:  # noqa: BLE001
                 _LOGGER.exception("Sync of %s and %s failed", self.a, self.b)
+                await self._set_status(
+                    "error",
+                    last_error=self._now(),
+                    last_error_type=type(err).__name__,
+                    synced_items=self._last_synced_items,
+                )
             else:
                 if write_failed:
+                    await self._set_status(
+                        "error",
+                        last_error=self._now(),
+                        last_error_type="WriteError",
+                        synced_items=self._last_synced_items,
+                    )
                     self._schedule_retry(trigger, "One or more list updates failed")
+                elif self._sync_deferred:
+                    self._retry_attempt = 0
+                    await self._set_status("idle", synced_items=0)
                 else:
                     self._retry_attempt = 0
+                    await self._set_status(
+                        "success",
+                        last_success=self._now(),
+                        synced_items=self._last_synced_items,
+                    )
 
     def _schedule_retry(self, trigger: str | None, reason: str) -> None:
         """Schedule a bounded retry while preserving the most recent change trigger."""
@@ -226,7 +309,7 @@ class TodoSyncer:
     async def _call(self, service: str, data: dict) -> None:
         await self.hass.services.async_call("todo", service, data, blocking=True)
 
-    async def _apply(self, entity_id: str, current: dict, key: str, target: dict | None) -> None:
+    async def _apply(self, entity_id: str, current: dict, key: str, target: dict | None) -> bool:
         existing = current.get(key)
         # A missing target means the source side deleted this item. Remove it only
         # when it exists on the destination; otherwise there is nothing to apply.
@@ -235,8 +318,10 @@ class TodoSyncer:
                 await self._call(
                     "remove_item", {"entity_id": entity_id, "item": existing["title"]}
                 )
-            return
+                return True
+            return False
         supports = self._supports_description(entity_id)
+        created = existing is None
         if existing is None:
             # Create the item first. Some providers need a follow-up update to set
             # its status, so the common update logic below also handles new items.
@@ -261,8 +346,10 @@ class TodoSyncer:
                 data["rename"] = self._title(
                     entity_id, existing["name"], target["description"]
                 )
+        changed = created or len(data) > 2
         if len(data) > 2:
             await self._call("update_item", data)
+        return changed
 
     def _mass_delete_suspects(
         self, items_a: dict[str, dict], items_b: dict[str, dict]
@@ -297,6 +384,7 @@ class TodoSyncer:
         return True
 
     async def _sync(self, trigger: str | None) -> bool:
+        self._sync_deferred = False
         # Read both lists completely before applying anything. A failed read must
         # never be interpreted as an empty list or advance the persisted snapshot.
         raw = {}
@@ -328,6 +416,7 @@ class TodoSyncer:
         # read failure. Do not propagate those deletions until the same result is seen
         # again after the confirmation window.
         if self._hold_back(self._mass_delete_suspects(items_a, items_b)):
+            self._sync_deferred = True
             self._schedule(trigger, CONFIRM_SECONDS + 10)
             return False
         snap = self._snapshot
@@ -337,6 +426,7 @@ class TodoSyncer:
         )
         new_snap: dict[str, dict] = {}
         write_failed = False
+        self._last_synced_items = 0
 
         # Three-way diff: compare each side (A/B) with the last synced value (snapshot).
         # This distinguishes a one-sided edit from a conflict where both sides changed.
@@ -373,7 +463,9 @@ class TodoSyncer:
                 _LOGGER.debug("Skipped synchronization of completed item history")
                 continue
             try:
-                await self._apply(dest_id, dest_items, key, source)
+                changed = await self._apply(dest_id, dest_items, key, source)
+                if changed:
+                    self._last_synced_items += 1
             except Exception:  # noqa: BLE001
                 # Keep the old baseline for this item so the next run retries it. Other
                 # items can still sync; _run schedules a bounded retry after this pass.
@@ -388,7 +480,7 @@ class TodoSyncer:
         self._snapshot = new_snap
         # Persist even if unload started during this run: list changes have already been
         # applied, so the stored baseline must match them before a reloaded instance starts.
-        await self._store.async_save({"snapshot": new_snap})
+        await self._save_store()
         return write_failed
 
 

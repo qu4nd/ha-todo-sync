@@ -10,6 +10,13 @@
     "error": { "same_list": "Please select two different lists." },
     "abort": { "already_configured": "This pair of lists is already configured." }
   },
+  "entity": {
+    "sensor": {
+      "sync_status": {
+        "name": "Synchronization status"
+      }
+    }
+  },
   "options": {
     "step": {
       "init": {
