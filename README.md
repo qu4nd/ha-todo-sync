@@ -4,8 +4,8 @@
 
 # To-do Sync for Home Assistant
 
-**Bidirectional real-time & periodic sync between any two Home Assistant `todo` entities.**  
-*Purpose-built for **Bring!** ⇄ **Alexa Shopping List**, compatible with any To-do integration.*
+**Event-driven and periodic bidirectional sync between two Home Assistant `todo` entities.**  
+*Purpose-built for **Bring!** ⇄ **Alexa Shopping List**. Designed for Home Assistant To-do entities; compatibility depends on the capabilities and behavior of each provider.*
 
 ![Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fqu4nd%2Fha-todo-sync%2Fmain%2Fcustom_components%2Ftodo_sync%2Fmanifest.json&query=%24.version&label=version&color=blue&style=for-the-badge)
 [![HA Version](https://img.shields.io/badge/Home%20Assistant-2026.11.0%2B-41BDF5?style=for-the-badge&logo=home-assistant&logoColor=white)](https://www.home-assistant.io/)
@@ -22,7 +22,7 @@
 
 * 🔄 **True Two-Way Sync:** Adding, removing, checking, and unchecking items are synced in both directions using a persistent 3-way state snapshot.
 * ⚖️ **Smart Quantity & Details Bridging:** Automatically translates between lists *with* item descriptions (e.g., **Bring!**) and lists *without* them (e.g., **Alexa**).
-* ⚡ **Event-Driven + Periodic:** Triggers automatically on list changes (with a `3 s` debounce) alongside a configurable fallback interval (`1–1440 min`, default `5 min`).
+* ⚡ **Event-Driven + Periodic:** Reacts to Home Assistant list-change events (with a `3 s` debounce) and runs a configurable periodic fallback (`1–1440 min`, default `5 min`). End-to-end sync speed also depends on how quickly each provider updates its Home Assistant entity.
 * 🔘 **Ad-Hoc Sync Button:** Exposes a `Sync now` button entity per list pair for dashboards or custom automations.
 * 🛡️ **Mass-Delete Safety Brake:** Protects your lists against faulty cloud reads. If 5 or more open items (and more than half of the list) vanish at once, the sync holds back for `6 minutes` to verify the deletion isn't a temporary API glitch.
 * 🕓 **Clean History Handling:** Completed items (such as Bring!'s *"recently used"* history) are never created or deleted on the opposing list—only status changes of mutually existing items are synced.
@@ -74,7 +74,7 @@ Copy the `custom_components/todo_sync` folder into your Home Assistant `<config>
 
 ## 🤖 Pro-Tip: Fast Sync Automation
 
-Source integrations only update as fast as their polling intervals allow (Core **Bring!** polls every `90 s`, **Alexa Devices** every `5 min`). You can use the provided `button` entity alongside `homeassistant.update_entity` to force an immediate refresh.
+Some source integrations refresh their Home Assistant entities periodically rather than immediately. To request a refresh before syncing, you can use the provided `button` entity alongside `homeassistant.update_entity` (where supported by the provider). The integration reacts to the resulting Home Assistant state changes; it cannot make a provider fetch external changes faster than that provider allows.
 
 Replace the placeholder entity IDs below with the actual entity IDs from your Home Assistant instance:
 
