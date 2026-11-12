@@ -6,22 +6,36 @@ on:
       - closed
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version from custom_components/todo_sync/manifest.json (without v)"
+        required: true
+        type: string
+      release_sha:
+        description: "Merge commit SHA on main to tag and release"
+        required: true
+        type: string
 
-# The built-in token only needs to check out the merged commit.
+# The built-in token only needs to check out the selected commit.
 permissions:
   contents: read
 
 jobs:
   publish:
     if: >-
-      github.event.pull_request.merged == true &&
-      startsWith(github.event.pull_request.head.ref, 'automation/release-v')
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.merged == true &&
+       startsWith(github.event.pull_request.head.ref, 'automation/release-v')) ||
+      (github.event_name == 'workflow_dispatch' &&
+       github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     steps:
-      - name: Check out merged commit
+      - name: Check out release commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.merge_commit_sha || inputs.release_sha }}
+          fetch-depth: 0
 
       - name: Create GitHub App installation token
         id: app-token
@@ -36,16 +50,31 @@ jobs:
       - name: Create GitHub release and tag
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha || inputs.release_sha }}
           HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           version="$(python -c 'import json; print(json.load(open("custom_components/todo_sync/manifest.json", encoding="utf-8"))["version"])')"
           tag="v${version}"
-          expected_branch="automation/release-${tag}"
 
-          if [[ "$HEAD_BRANCH" != "$expected_branch" ]]; then
-            echo "Unexpected release branch: $HEAD_BRANCH (expected $expected_branch)"
-            exit 1
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            expected_branch="automation/release-${tag}"
+            if [[ "$HEAD_BRANCH" != "$expected_branch" ]]; then
+              echo "Unexpected release branch: $HEAD_BRANCH (expected $expected_branch)"
+              exit 1
+            fi
+          else
+            if [[ "$version" != "$INPUT_VERSION" ]]; then
+              echo "Manifest version $version does not match requested version $INPUT_VERSION"
+              exit 1
+            fi
+
+            git fetch origin main --no-tags
+            if ! git merge-base --is-ancestor "$MERGE_SHA" FETCH_HEAD; then
+              echo "Selected commit is not contained in main."
+              exit 1
+            fi
           fi
 
           if gh release view "$tag" >/dev/null 2>&1; then
