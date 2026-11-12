@@ -144,13 +144,12 @@ class TodoSyncer:
             if self._stopped:
                 return
             try:
-                await self._sync(trigger)
+                write_failed = await self._sync(trigger)
             except _TodoListReadError as err:
                 self._schedule_retry(trigger, f"Could not read {err}")
             except Exception:  # noqa: BLE001
                 _LOGGER.exception("Sync of %s and %s failed", self.a, self.b)
             else:
-                write_failed = await self._sync(trigger)
                 if write_failed:
                     self._schedule_retry(trigger, "One or more list updates failed")
                 else:
