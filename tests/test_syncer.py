@@ -330,7 +330,7 @@ async def test_failed_read_schedules_bounded_exponential_retry(syncer):
 async def test_successful_sync_resets_read_retry_backoff(syncer):
     syncer._ready = lambda: True
     syncer._retry_attempt = 4
-    syncer._sync = AsyncMock()
+    syncer._sync = AsyncMock(return_value=False)
 
     await syncer._run(None)
 
