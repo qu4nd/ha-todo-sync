@@ -7,7 +7,7 @@ from homeassistant.config_entries import ConfigEntry
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.todo_sync import (
-    MAX_READ_RETRY_SECONDS,
+    MAX_RETRY_SECONDS,
     RETRY_SECONDS,
     TodoSyncer,
     _TodoListReadError,
@@ -360,8 +360,8 @@ async def test_failed_write_schedules_bounded_exponential_retry(syncer):
         await syncer._run(None)
 
     assert [delay for _, delay in scheduled] == [
-        30, 60, 120, 240, MAX_READ_RETRY_SECONDS, MAX_READ_RETRY_SECONDS,
-        MAX_READ_RETRY_SECONDS,
+        30, 60, 120, 240, MAX_RETRY_SECONDS, MAX_RETRY_SECONDS,
+        MAX_RETRY_SECONDS,
     ]
     assert syncer._retry_attempt == 7
 
