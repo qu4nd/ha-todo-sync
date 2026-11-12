@@ -74,7 +74,9 @@ Copy the `custom_components/todo_sync` folder into your Home Assistant `<config>
 
 ## 🤖 Pro-Tip: Fast Sync Automation
 
-Source integrations only update as fast as their polling intervals allow (Core **Bring!** polls every `90 s`, **Alexa Devices** every `5 min`). You can use the provided `button` entity alongside `homeassistant.update_entity` to force an immediate refresh:
+Source integrations only update as fast as their polling intervals allow (Core **Bring!** polls every `90 s`, **Alexa Devices** every `5 min`). You can use the provided `button` entity alongside `homeassistant.update_entity` to force an immediate refresh.
+
+Replace the placeholder entity IDs below with the actual entity IDs from your Home Assistant instance:
 
 ```yaml
 alias: 'Shopping List: Force Refresh & Sync'
@@ -83,12 +85,12 @@ actions:
   - action: homeassistant.update_entity
     data:
       entity_id:
-        - todo.[list_A]
-        - todo.[list_B]
+        - todo.YOUR_FIRST_LIST
+        - todo.YOUR_SECOND_LIST
   - delay: '00:00:02'
   - action: button.press
     target:
-      entity_id: button.[ha_todo_sync_entity_sync_now]
+      entity_id: button.YOUR_SYNC_NOW_BUTTON
 ```
 
 ---
