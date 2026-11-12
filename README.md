@@ -11,6 +11,7 @@
 [![HA Version](https://img.shields.io/badge/Home%20Assistant-2026.11.0%2B-41BDF5?style=for-the-badge&logo=home-assistant&logoColor=white)](https://www.home-assistant.io/)
 [![IoT Class](https://img.shields.io/badge/IoT%20Class-Local%20Push-success?style=for-the-badge)](https://www.home-assistant.io/blog/2016/02/12/classifying-the-internet-of-things/)
 [![License](https://img.shields.io/github/license/qu4nd/ha-todo-sync?style=for-the-badge)](LICENSE)
+[![Privacy](https://img.shields.io/badge/Privacy-Local%20Only-success?style=for-the-badge&logo=homeassistant&logoColor=white)](#-privacy--your-data-stays-yours)
 
 [**🐛 Report Issue**](https://github.com/qu4nd/ha-todo-sync/issues)
 
@@ -27,6 +28,20 @@
 * 🛡️ **Mass-Delete Safety Brake:** Protects your lists against faulty cloud reads. If 5 or more open items (and more than half of the list) vanish at once, the sync holds back for `6 minutes` to verify the deletion isn't a temporary API glitch.
 * 🕓 **Clean History Handling:** Completed items (such as Bring!'s *"recently used"* history) are never created or deleted on the opposing list—only status changes of mutually existing items are synced.
 * 🌐 **100% UI Configured:** Full Config Flow & Options Flow support with English and German translations. Zero YAML required.
+
+---
+
+## 🔒 Privacy – Your Data Stays Yours
+
+**To-do Sync runs locally inside your Home Assistant instance.** It does not connect to Bring!, Amazon, or any other provider directly. It only accesses the two Home Assistant `todo` entities you select, using Home Assistant's built-in services.
+
+- **No account access:** The integration never asks for or accesses your Bring! or Amazon credentials, account profiles, or login data.
+- **No external data transfer:** It does not send your list contents, personal data, or usage information to the developer or to any external server.
+- **Local storage only:** The synchronization snapshot is stored in Home Assistant's own local storage.
+
+Your existing Home Assistant provider integrations may still communicate with their respective cloud services. To-do Sync itself does not see or handle their account credentials or communicate with those services.
+
+**No cloud service. No tracking. No account access. Just local synchronization.**
 
 ---
 
