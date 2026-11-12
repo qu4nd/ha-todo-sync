@@ -146,6 +146,7 @@ class TodoSyncer:
             try:
                 write_failed = await self._sync(trigger)
             except _TodoListReadError as err:
+                _LOGGER.exception("Could not read %s", err)
                 self._schedule_retry(trigger, f"Could not read {err}")
             except Exception:  # noqa: BLE001
                 _LOGGER.exception("Sync of %s and %s failed", self.a, self.b)
