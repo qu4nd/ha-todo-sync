@@ -76,6 +76,7 @@ class TodoSyncer:
         self._stopped = False
         self._retry_attempt = 0
         self._last_synced_items = 0
+        self._sync_deferred = False
         self._status = {
             "state": "idle",
             "last_success": None,
@@ -227,6 +228,9 @@ class TodoSyncer:
                         synced_items=self._last_synced_items,
                     )
                     self._schedule_retry(trigger, "One or more list updates failed")
+                elif self._sync_deferred:
+                    self._retry_attempt = 0
+                    await self._set_status("idle", synced_items=0)
                 else:
                     self._retry_attempt = 0
                     await self._set_status(
@@ -380,6 +384,7 @@ class TodoSyncer:
         return True
 
     async def _sync(self, trigger: str | None) -> bool:
+        self._sync_deferred = False
         # Read both lists completely before applying anything. A failed read must
         # never be interpreted as an empty list or advance the persisted snapshot.
         raw = {}
@@ -411,6 +416,7 @@ class TodoSyncer:
         # read failure. Do not propagate those deletions until the same result is seen
         # again after the confirmation window.
         if self._hold_back(self._mass_delete_suspects(items_a, items_b)):
+            self._sync_deferred = True
             self._schedule(trigger, CONFIRM_SECONDS + 10)
             return False
         snap = self._snapshot
