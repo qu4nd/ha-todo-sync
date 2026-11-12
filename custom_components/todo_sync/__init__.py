@@ -335,8 +335,6 @@ class TodoSyncer:
             "Sync (trigger=%s): %s has %d items, %s has %d items, snapshot %d",
             trigger, self.a, len(items_a), self.b, len(items_b), len(snap),
         )
-        _LOGGER.debug("A items: %s", {k: self._val(v) for k, v in items_a.items()})
-        _LOGGER.debug("B items: %s", {k: self._val(v) for k, v in items_b.items()})
         new_snap: dict[str, dict] = {}
         write_failed = False
 
@@ -364,15 +362,15 @@ class TodoSyncer:
             )
             dest = dest_items.get(key)
             _LOGGER.debug(
-                "%r: A=%s B=%s snapshot=%s -> %s to %s",
-                key, sa, sb, ss, "copy" if source else "delete", dest_id,
+                "List item change detected; action=%s destination=%s",
+                "copy" if source else "delete", dest_id,
             )
             # Completed entries are provider history, not active list content. Avoid
             # recreating or deleting them on the opposite side when one side omits them.
             if (source is None and dest and dest["status"] == DONE) or (
                 dest is None and source and source["status"] == DONE
             ):
-                _LOGGER.debug("%r: skipped (completed history)", key)
+                _LOGGER.debug("Skipped synchronization of completed item history")
                 continue
             try:
                 await self._apply(dest_id, dest_items, key, source)
@@ -380,7 +378,7 @@ class TodoSyncer:
                 # Keep the old baseline for this item so the next run retries it. Other
                 # items can still sync; _run schedules a bounded retry after this pass.
                 write_failed = True
-                _LOGGER.exception("Applying %r to %s failed, will retry", key, dest_id)
+                _LOGGER.exception("Applying a list item to %s failed, will retry", dest_id)
                 if s:
                     new_snap[key] = s
                 continue
