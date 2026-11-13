@@ -149,7 +149,7 @@ Snapshots are written only when their persisted data changes. Transient `syncing
 * **Conflict Priority:** Items are matched case-insensitively by the combination of name and description. Items with the same name but different descriptions remain independent. If both lists modify the exact same item since the last synchronized snapshot, the most recent Home Assistant list-change event received during the `3 s` debounce window wins. Each new event resets that debounce window, so if both lists change during it, the list whose event arrives last is preferred. If a sync starts without a pending list-change trigger (for example, at startup or on a periodic run), **List A** wins. A manual sync also defaults to **List A** when no list-change trigger is pending.
 * **Renaming Items:** Changing an item's name or description is processed as a deletion of the old name/details pair + creation of the new pair.
 * **Exact Duplicates:** Two entries with exactly the same name and description are treated as one logical item; the Home Assistant sync model does not currently preserve duplicate multiplicity.
-* **Text-Only Details on Alexa:** Adding a *brand-new* item on Alexa with text-only details (e.g., `"Milch fettarm"` without numbers) is read as the full item name.
+* **Ambiguous Text on Alexa:** Lists without description support always split a title at the first space: the first word becomes the item name and everything after it becomes the description. For example, `"Milch fettarm"` is interpreted as name `Milch` and description `fettarm`. The integration cannot distinguish a multi-word product name from a name followed by details; this rule applies to new items as well.
 * **Parentheses:** Parentheses in item names are not treated specially.
 
 ---
