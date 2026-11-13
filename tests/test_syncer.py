@@ -36,9 +36,12 @@ def item(name, status="needs_action", description=""):
     }
 
 
-def test_split_title_extracts_quantity_and_unit(syncer):
-    assert syncer._split_title("Milch 0,5 l", {}) == ("Milch", "0,5 l")
-    assert syncer._split_title("Eier 10", {}) == ("Eier", "10")
+def test_split_title_uses_first_word_as_identity(syncer):
+    assert syncer._split_title("Milch 0,5 l") == ("Milch", "0,5 l")
+    assert syncer._split_title("Eier 10") == ("Eier", "10")
+    assert syncer._split_title("gelbe Tomaten") == ("gelbe", "Tomaten")
+    assert syncer._split_title("rote Zwiebeln") == ("rote", "Zwiebeln")
+    assert syncer._split_title("Buttermilch") == ("Buttermilch", "")
 
 
 @pytest.mark.parametrize(
@@ -48,6 +51,8 @@ def test_split_title_extracts_quantity_and_unit(syncer):
         ("Pizza 4 Stagioni", ("Pizza", "4 Stagioni")),
         ("Formel 1", ("Formel", "1")),
         ("Windows 11 Pro", ("Windows", "11 Pro")),
+        ("gelbe Tomaten", ("gelbe", "Tomaten")),
+        ("rote Zwiebeln", ("rote", "Zwiebeln")),
         ("gelbe Tomaten", ("gelbe", "Tomaten")),
         ("rote Zwiebeln", ("rote", "Zwiebeln")),
     ],
@@ -114,10 +119,14 @@ def test_parse_keeps_same_name_with_different_descriptions(syncer):
 
 
 @pytest.mark.parametrize(
-    "title", ["gelbe Tomaten", "Pizza mit viel Liebe", "Buttermilch"]
+    ("title", "expected"),
+    [
+        ("Pizza mit viel Liebe", ("Pizza", "mit viel Liebe")),
+        ("Buttermilch", ("Buttermilch", "")),
+    ],
 )
-def test_split_title_keeps_plain_names_intact(syncer, title):
-    assert syncer._split_title(title, {}) == (title, "")
+def test_split_title_handles_text_details(syncer, title, expected):
+    assert syncer._split_title(title, {}) == expected
 
 
 def test_parse_alexa_titles_uses_known_name_details_pairs(syncer):
