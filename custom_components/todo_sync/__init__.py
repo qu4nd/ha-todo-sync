@@ -9,6 +9,7 @@ makes conflict handling and retries consistent for every supported to-do provide
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 import time
@@ -40,6 +41,7 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS = ["button", "sensor"]
 RETRY_SECONDS = 30
 MAX_RETRY_SECONDS = 300
+PENDING_WRITE_SECONDS = 600
 MASS_DELETE_MIN = 5
 CONFIRM_SECONDS = 360  # longer than the slowest source poll (Alexa: 300 s)
 DONE = "completed"
@@ -72,6 +74,8 @@ class TodoSyncer:
         # Last successfully synchronized state, keyed by normalized name + description.
         # Comparing both live lists with this baseline lets us tell which side changed.
         self._snapshot: dict[str, dict] = {}
+        # Expected destination values protect against providers that expose writes late.
+        self._pending_writes: dict[str, dict] = {}
         self._unsubs: list[CALLBACK_TYPE] = []
         self._debounce: CALLBACK_TYPE | None = None
         # Remember the latest list that caused a run; it breaks simultaneous-change ties.
@@ -89,10 +93,19 @@ class TodoSyncer:
             "last_error_type": None,
         }
         self._status_listeners = []
+        self._persisted_status = dict(self._status)
+        self._last_saved_data: dict | None = None
+        self._last_scheduled_data: dict | None = None
 
     async def async_start(self) -> None:
         data = await self._store.async_load()
         self._snapshot = self._migrate_snapshot((data or {}).get("snapshot", {}))
+        self._pending_writes = (data or {}).get("pending_writes", {})
+        now = time.time()
+        self._pending_writes = {
+            key: value for key, value in self._pending_writes.items()
+            if value.get("expires", 0) > now
+        }
         stored_status = (data or {}).get("status", {})
         self._status.update(
             {key: stored_status[key] for key in self._status if key in stored_status}
@@ -100,6 +113,8 @@ class TodoSyncer:
         # A process cannot still be syncing after Home Assistant has restarted.
         if self._status["state"] == "syncing":
             self._status["state"] = "idle"
+        self._persisted_status = dict(self._status)
+        self._last_saved_data = copy.deepcopy(data)
         await self._save_store()
         self._unsubs.append(
             async_track_state_change_event(self.hass, [self.a, self.b], self._on_change)
@@ -149,15 +164,30 @@ class TodoSyncer:
             migrated[key] = item
         return migrated
 
-    async def _save_store(self) -> None:
-        await self._store.async_save(
-            {"snapshot": self._snapshot, "status": dict(self._status)}
-        )
+    def _store_data(self) -> dict:
+        return {
+            "snapshot": copy.deepcopy(self._snapshot),
+            "status": dict(self._persisted_status),
+            "pending_writes": copy.deepcopy(self._pending_writes),
+        }
 
-    async def _set_status(self, state: str, **attributes) -> None:
+    async def _save_store(self) -> None:
+        """Persist changed snapshots immediately; unchanged payloads cause no disk write."""
+        data = self._store_data()
+        if data == self._last_saved_data:
+            return
+        await self._store.async_save(data)
+        self._last_saved_data = copy.deepcopy(data)
+
+    async def _set_status(self, state: str, *, persist: bool = True, **attributes) -> None:
         self._status.update(state=state, **attributes)
         self._notify_status()
-        await self._save_store()
+        if persist:
+            self._persisted_status = dict(self._status)
+            data = self._store_data()
+            if data != self._last_saved_data and data != self._last_scheduled_data:
+                self._last_scheduled_data = copy.deepcopy(data)
+                self._store.async_delay_save(self._store_data, 5)
 
     @staticmethod
     def _now() -> str:
@@ -179,6 +209,7 @@ class TodoSyncer:
         # Wait for an in-flight sync so a reloaded instance never overlaps with it
         async with self._lock:
             pass
+        await self._save_store()
 
     @callback
     def _on_change(self, event: Event) -> None:
@@ -216,7 +247,7 @@ class TodoSyncer:
             if self._stopped:
                 return
             self._last_synced_items = 0
-            await self._set_status("syncing", synced_items=0)
+            await self._set_status("syncing", persist=False, synced_items=0)
             try:
                 write_failed = await self._sync(trigger)
             except _TodoListReadError:
@@ -443,6 +474,58 @@ class TodoSyncer:
         )
         return True
 
+    @staticmethod
+    def _pending_key(entity_id: str, key: str) -> str:
+        return json.dumps([entity_id, key], ensure_ascii=False, separators=(",", ":"))
+
+    def _track_pending_write(
+        self, entity_id: str, key: str, before: dict | None, expected: dict | None
+    ) -> None:
+        expected_item = None
+        if expected is not None:
+            expected_item = {
+                "title": self._title(entity_id, expected["name"], expected["description"]),
+                "name": expected["name"],
+                "status": expected["status"],
+                "description": expected["description"],
+            }
+        self._pending_writes[self._pending_key(entity_id, key)] = {
+            "entity_id": entity_id,
+            "key": key,
+            "before": list(self._val(before)) if before is not None else None,
+            "expected": list(self._val(expected)) if expected is not None else None,
+            "item": expected_item,
+            "expires": time.time() + PENDING_WRITE_SECONDS,
+        }
+
+    def _resolve_pending_writes(
+        self, items_a: dict[str, dict], items_b: dict[str, dict]
+    ) -> None:
+        """Mask only stale destination reads while the source still has our expected value."""
+        now = time.time()
+        for pending_id, pending in list(self._pending_writes.items()):
+            if pending.get("expires", 0) <= now:
+                self._pending_writes.pop(pending_id, None)
+                continue
+            entity_id, key = pending["entity_id"], pending["key"]
+            destination = items_a if entity_id == self.a else items_b
+            source = items_b if entity_id == self.a else items_a
+            current_item = destination.get(key)
+            current = list(self._val(current_item)) if current_item is not None else None
+            source_item = source.get(key)
+            source_value = list(self._val(source_item)) if source_item is not None else None
+            expected = pending["expected"]
+            if current == expected:
+                self._pending_writes.pop(pending_id, None)
+            elif current == pending["before"] and source_value == expected:
+                if pending["item"] is None:
+                    destination.pop(key, None)
+                else:
+                    destination[key] = dict(pending["item"])
+            else:
+                # A third value is a genuine edit/conflict, not a stale provider read.
+                self._pending_writes.pop(pending_id, None)
+
     async def _sync(self, trigger: str | None) -> bool:
         self._sync_deferred = False
         # Read both lists completely before applying anything. A failed read must
@@ -458,6 +541,7 @@ class TodoSyncer:
         # regardless of which provider supplied the item.
         items_a = self._parse(self.a, raw[self.a], {})
         items_b = self._parse(self.b, raw[self.b], {})
+        self._resolve_pending_writes(items_a, items_b)
         # A sudden disappearance of most open items can be a transient provider/API
         # read failure. Do not propagate those deletions until the same result is seen
         # again after the confirmation window.
@@ -509,9 +593,11 @@ class TodoSyncer:
                 _LOGGER.debug("Skipped synchronization of completed item history")
                 continue
             try:
+                previous_destination = dest
                 changed = await self._apply(dest_id, dest_items, key, source)
                 if changed:
                     self._last_synced_items += 1
+                    self._track_pending_write(dest_id, key, previous_destination, source)
             except Exception:  # noqa: BLE001
                 # Keep the old baseline for this item so the next run retries it. Other
                 # items can still sync; _run schedules a bounded retry after this pass.

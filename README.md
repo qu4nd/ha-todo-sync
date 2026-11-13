@@ -139,6 +139,12 @@ actions:
 
 ## ⚠️ Conflict Resolution & Limitations
 
+### Provider write delays
+
+Some providers update their Home Assistant entity state asynchronously after a service call. To avoid interpreting an old provider read as a new change, To-do Sync keeps a local pending-write expectation for the destination item for up to **10 minutes**. While the destination still shows the exact pre-write value and the source still matches the expected new value, that stale destination read is ignored. The expectation is cleared when the destination reflects the write, when a different value indicates a genuine edit/conflict, or when the time window expires. Failed writes never create an expectation. Pending expectations are stored locally alongside the synchronization snapshot and restored after a restart.
+
+Snapshots are written only when their persisted data changes. Transient `syncing` sensor updates remain in memory; final status changes are persisted with a short delayed save to coalesce writes. A snapshot is flushed during unload after any in-flight sync has finished.
+
 * **Conflict Priority:** Items are matched case-insensitively by the combination of name and description. Items with the same name but different descriptions remain independent. If both lists modify the exact same item between syncs, the list that triggered the sync wins (on periodic timer runs, **List A** wins).
 * **Renaming Items:** Changing an item's name or description is processed as a deletion of the old name/details pair + creation of the new pair.
 * **Exact Duplicates:** Two entries with exactly the same name and description are treated as one logical item; the Home Assistant sync model does not currently preserve duplicate multiplicity.

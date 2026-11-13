@@ -1,6 +1,6 @@
 """Unit tests for the bidirectional synchronization logic."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntry
@@ -24,6 +24,7 @@ def syncer(hass):
     )
     instance = TodoSyncer(hass, entry)
     instance._store.async_save = AsyncMock()
+    instance._store.async_delay_save = Mock()
     return instance
 
 
@@ -34,6 +35,60 @@ def item(name, status="needs_action", description=""):
         "status": status,
         "description": description,
     }
+
+
+
+def test_pending_write_masks_stale_destination_read_until_provider_catches_up(syncer):
+    key = _identity("Milk", "")
+    before = item("Milk")
+    expected = item("Milk", status="completed")
+    syncer._track_pending_write("todo.b", key, before, expected)
+    items_a = {key: expected}
+    items_b = {key: before}
+
+    syncer._resolve_pending_writes(items_a, items_b)
+
+    assert syncer._val(items_b[key]) == syncer._val(expected)
+    assert syncer._pending_key("todo.b", key) in syncer._pending_writes
+
+    # Once the provider exposes the expected value, the expectation is acknowledged.
+    syncer._resolve_pending_writes(items_a, items_b)
+    assert syncer._pending_writes == {}
+
+
+def test_pending_write_does_not_hide_a_genuine_conflicting_edit(syncer):
+    key = _identity("Milk", "")
+    before = item("Milk")
+    expected = item("Milk", status="completed")
+    genuine_edit = item("Milk", description="oat")
+    syncer._track_pending_write("todo.b", key, before, expected)
+    items_a = {key: expected}
+    items_b = {key: genuine_edit}
+
+    syncer._resolve_pending_writes(items_a, items_b)
+
+    assert items_b[key] == genuine_edit
+    assert syncer._pending_writes == {}
+
+
+def test_pending_write_expires(syncer):
+    key = _identity("Milk", "")
+    syncer._track_pending_write("todo.b", key, item("Milk"), item("Milk", status="completed"))
+    pending_id = syncer._pending_key("todo.b", key)
+    syncer._pending_writes[pending_id]["expires"] = 0
+
+    syncer._resolve_pending_writes({key: item("Milk", status="completed")}, {key: item("Milk")})
+
+    assert syncer._pending_writes == {}
+
+
+@pytest.mark.asyncio
+async def test_unchanged_store_payload_is_not_written(syncer):
+    syncer._last_saved_data = syncer._store_data()
+
+    await syncer._save_store()
+
+    syncer._store.async_save.assert_not_awaited()
 
 
 def test_split_title_uses_first_word_as_identity(syncer):
@@ -315,7 +370,18 @@ async def test_new_item_on_a_is_applied_to_b(syncer):
 
     syncer._apply.assert_awaited_once_with("todo.b", {}, _identity("Milch", "3"), source)
     assert syncer._snapshot == {_identity("Milch", "3"): source}
-    syncer._store.async_save.assert_awaited_once_with({"snapshot": {_identity("Milch", "3"): source}, "status": syncer._status})
+    syncer._store.async_save.assert_awaited_once_with({
+        "snapshot": {_identity("Milch", "3"): source},
+        "status": syncer._persisted_status,
+        "pending_writes": {
+            syncer._pending_key("todo.b", _identity("Milch", "3")): {
+                "entity_id": "todo.b", "key": _identity("Milch", "3"),
+                "before": None, "expected": ["needs_action", "3"],
+                "item": {"title": "Milch", "name": "Milch", "status": "needs_action", "description": "3"},
+                "expires": syncer._pending_writes[syncer._pending_key("todo.b", _identity("Milch", "3"))]["expires"],
+            }
+        },
+    })
 
 
 @pytest.mark.asyncio
@@ -398,6 +464,7 @@ async def test_failed_apply_keeps_previous_snapshot_for_retry(syncer):
     syncer._apply.assert_awaited_once()
     assert write_failed is True
     assert syncer._snapshot == {_identity("Milch", "3"): old}
+    assert syncer._pending_writes == {}
 
 
 @pytest.mark.asyncio
