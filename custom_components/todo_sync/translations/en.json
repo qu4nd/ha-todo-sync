@@ -26,7 +26,12 @@
           "syncing": "Syncing",
           "held_back": "On hold",
           "success": "Success",
-          "error": "Error"
+          "error": "Error",
+          "waiting": "Waiting for to-do list"
+        },
+        "attributes": {
+          "waiting_entity": "Unavailable list",
+          "waiting_state": "List state"
         }
       }
     },
