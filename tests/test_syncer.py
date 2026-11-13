@@ -491,28 +491,44 @@ async def test_failed_apply_keeps_previous_snapshot_for_retry(syncer):
     [
         (
             "todo.a",
-            [[], [{"summary": "Milch", "status": "needs_action", "description": ""}]],
+            [
+                [{"summary": "Brot", "status": "needs_action", "description": ""}],
+                [
+                    {"summary": "Milch", "status": "needs_action", "description": ""},
+                    {"summary": "Brot", "status": "needs_action", "description": ""},
+                ],
+            ],
             "todo.b",
         ),
         (
             "todo.b",
-            [[{"summary": "Milch", "status": "needs_action", "description": ""}], []],
+            [
+                [
+                    {"summary": "Milch", "status": "needs_action", "description": ""},
+                    {"summary": "Brot", "status": "needs_action", "description": ""},
+                ],
+                [{"summary": "Brot", "status": "needs_action", "description": ""}],
+            ],
             "todo.a",
         ),
     ],
 )
 async def test_deleting_open_item_is_synced(syncer, trigger, fetch_results, destination):
-    old = item("Milch")
-    syncer._snapshot = {_identity("Milch", ""): old}
+    milk = item("Milch")
+    bread = item("Brot")
+    milk_key = _identity("Milch", "")
+    bread_key = _identity("Brot", "")
+    syncer._snapshot = {milk_key: milk, bread_key: bread}
     syncer._fetch = AsyncMock(side_effect=fetch_results)
     syncer._supports_description = lambda _entity_id: True
     syncer._apply = AsyncMock()
 
     await syncer._sync(trigger)
 
-    syncer._apply.assert_awaited_once_with(destination, {_identity("Milch", ""): old}, _identity("Milch", ""), None)
-    assert syncer._snapshot == {}
-
+    syncer._apply.assert_awaited_once_with(
+        destination, {milk_key: milk, bread_key: bread}, milk_key, None
+    )
+    assert syncer._snapshot == {bread_key: bread}
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
@@ -565,40 +581,34 @@ async def test_deleting_completed_item_keeps_history_on_other_list(syncer):
     assert syncer._snapshot == {}
 
 
-def test_mass_delete_suspects_require_minimum_count_and_majority(syncer):
-    syncer._snapshot = {f"item {i}": item(f"item {i}") for i in range(8)}
-    current_a = {f"item {i}": item(f"item {i}") for i in range(3)}
-    current_b = dict(syncer._snapshot)
-
-    suspects = syncer._mass_delete_suspects(current_a, current_b)
-
-    assert suspects == frozenset(("todo.a", f"item {i}") for i in range(3, 8))
-
-
-@pytest.mark.parametrize("total, missing", [(8, 4), (10, 5), (8, 3)])
-def test_mass_delete_suspects_ignore_results_below_threshold(syncer, total, missing):
+def test_empty_list_suspects_only_when_a_list_is_completely_empty(syncer):
     syncer._snapshot = {
-        f"item {i}": item(f"item {i}") for i in range(total)
+        "milk": item("Milk"),
+        "bread": item("Bread"),
     }
-    current_a = {
-        f"item {i}": item(f"item {i}") for i in range(total - missing)
-    }
-    current_b = dict(syncer._snapshot)
+    partial_a = {"bread": item("Bread")}
 
-    assert syncer._mass_delete_suspects(current_a, current_b) == frozenset()
+    assert syncer._empty_list_suspects(partial_a, dict(syncer._snapshot)) == frozenset()
+    assert syncer._empty_list_suspects({}, dict(syncer._snapshot)) == frozenset({"todo.a"})
 
 
-def test_mass_delete_hold_requires_confirmation_window(syncer):
-    suspects = frozenset({("todo.a", "milk")})
+def test_empty_list_suspects_ignore_snapshots_without_open_items(syncer):
+    syncer._snapshot = {"milk": item("Milk", status="completed")}
+
+    assert syncer._empty_list_suspects({}, {}) == frozenset()
+
+
+def test_empty_list_hold_requires_confirmation_window(syncer):
+    suspects = frozenset({"todo.a"})
     with patch("custom_components.todo_sync.time.monotonic", side_effect=[100.0, 459.0, 460.0]):
         assert syncer._hold_back(suspects) is True
         assert syncer._hold_back(suspects) is True
         assert syncer._hold_back(suspects) is False
 
 
-def test_changed_mass_delete_result_restarts_confirmation(syncer):
-    first = frozenset({("todo.a", "milk")})
-    second = frozenset({("todo.a", "milk"), ("todo.a", "bread")})
+def test_changed_empty_list_result_restarts_confirmation(syncer):
+    first = frozenset({"todo.a"})
+    second = frozenset({"todo.a", "todo.b"})
     with patch("custom_components.todo_sync.time.monotonic", side_effect=[100.0, 200.0]):
         assert syncer._hold_back(first) is True
         assert syncer._hold_back(second) is True
@@ -606,15 +616,33 @@ def test_changed_mass_delete_result_restarts_confirmation(syncer):
     assert syncer._suspect == (second, 200.0)
 
 
-
-def test_mass_delete_suspect_clearing_resets_confirmation(syncer):
-    suspects = frozenset({("todo.a", "milk")})
+def test_empty_list_suspect_clearing_resets_confirmation(syncer):
+    suspects = frozenset({"todo.a"})
     with patch("custom_components.todo_sync.time.monotonic", side_effect=[100.0, 200.0]):
         assert syncer._hold_back(suspects) is True
         assert syncer._hold_back(frozenset()) is False
 
     assert syncer._suspect is None
 
+
+@pytest.mark.asyncio
+async def test_sync_holds_back_when_list_is_empty(syncer):
+    old = item("Milk")
+    syncer._snapshot = {_identity("Milk", ""): old}
+    syncer._fetch = AsyncMock(
+        side_effect=[[], [{"summary": "Milk", "status": "needs_action"}]]
+    )
+    syncer._supports_description = lambda _entity_id: True
+    syncer._apply = AsyncMock()
+    scheduled = []
+    syncer._schedule = lambda trigger, delay: scheduled.append((trigger, delay))
+
+    await syncer._sync("todo.a")
+
+    syncer._apply.assert_not_awaited()
+    assert syncer._snapshot == {_identity("Milk", ""): old}
+    assert syncer._sync_deferred is True
+    assert scheduled == [("todo.a", 370)]
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failed_entity", ["todo.a", "todo.b"])

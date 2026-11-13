@@ -42,7 +42,6 @@ PLATFORMS = ["button", "sensor"]
 RETRY_SECONDS = 30
 MAX_RETRY_SECONDS = 300
 PENDING_WRITE_SECONDS = 600
-MASS_DELETE_MIN = 5
 CONFIRM_SECONDS = 360  # longer than the slowest source poll (Alexa: 300 s)
 DONE = "completed"
 OPEN = "needs_action"
@@ -80,7 +79,7 @@ class TodoSyncer:
         self._debounce: CALLBACK_TYPE | None = None
         # Remember the latest list that caused a run; it breaks simultaneous-change ties.
         self._pending_trigger: str | None = None
-        self._suspect: tuple[frozenset, float] | None = None
+        self._suspect: tuple[frozenset[str], float] | None = None
         self._stopped = False
         self._retry_attempt = 0
         self._last_synced_items = 0
@@ -442,22 +441,20 @@ class TodoSyncer:
             await self._call("update_item", data)
         return changed
 
-    def _mass_delete_suspects(
+    def _empty_list_suspects(
         self, items_a: dict[str, dict], items_b: dict[str, dict]
-    ) -> frozenset:
-        """Return (list, key) pairs if a list lost most open items at once (likely a faulty read)."""
-        # Only compare open items: completed entries are history and are not part
-        # of the deletion safety check.
-        open_snap = {k for k, s in self._snapshot.items() if s["status"] == OPEN}
-        suspects: set = set()
-        for entity_id, items in ((self.a, items_a), (self.b, items_b)):
-            missing = {k for k in open_snap if k not in items}
-            if len(missing) >= MASS_DELETE_MIN and len(missing) * 2 > len(open_snap):
-                suspects |= {(entity_id, k) for k in missing}
-        return frozenset(suspects)
+    ) -> frozenset[str]:
+        """Return the IDs of completely empty lists while open snapshot items exist."""
+        if not any(item["status"] == OPEN for item in self._snapshot.values()):
+            return frozenset()
+        return frozenset(
+            entity_id
+            for entity_id, items in ((self.a, items_a), (self.b, items_b))
+            if not items
+        )
 
     def _hold_back(self, suspects: frozenset) -> bool:
-        """True while a mass deletion is not yet confirmed (same result for CONFIRM_SECONDS)."""
+        """True while an empty-list result is not yet confirmed."""
         now = time.monotonic()
         if not suspects:
             self._suspect = None
@@ -468,7 +465,8 @@ class TodoSyncer:
         if waited >= CONFIRM_SECONDS:
             return False
         _LOGGER.warning(
-            "Most open items vanished from a list at once; holding back and re-checking "
+            "A list that still has open snapshot items appears empty; "
+            "holding back and re-checking "
             "in %d s (accepted if the result stays the same)",
             CONFIRM_SECONDS - waited,
         )
@@ -542,10 +540,10 @@ class TodoSyncer:
         items_a = self._parse(self.a, raw[self.a], {})
         items_b = self._parse(self.b, raw[self.b], {})
         self._resolve_pending_writes(items_a, items_b)
-        # A sudden disappearance of most open items can be a transient provider/API
-        # read failure. Do not propagate those deletions until the same result is seen
-        # again after the confirmation window.
-        if self._hold_back(self._mass_delete_suspects(items_a, items_b)):
+        # A completely empty list can be a transient provider/API read failure.
+        # Do not propagate its deletions until the same result is seen again after
+        # the confirmation window.
+        if self._hold_back(self._empty_list_suspects(items_a, items_b)):
             self._sync_deferred = True
             self._schedule(trigger, CONFIRM_SECONDS + 10)
             return False
