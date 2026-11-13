@@ -28,10 +28,6 @@
           "success": "Erfolgreich",
           "error": "Fehler",
           "waiting": "Warte auf To-do-Liste"
-        },
-        "attributes": {
-          "waiting_entity": "Nicht verfügbare Liste",
-          "waiting_state": "Zustand der Liste"
         }
       }
     },
