@@ -90,6 +90,8 @@ class TodoSyncer:
             "last_error": None,
             "synced_items": 0,
             "last_error_type": None,
+            "waiting_entity": None,
+            "waiting_state": None,
         }
         self._status_listeners = []
         self._persisted_status = dict(self._status)
@@ -225,28 +227,55 @@ class TodoSyncer:
             self._debounce()
         self._debounce = async_call_later(self.hass, delay, self._run)
 
-    def _ready(self) -> bool:
+    def _unavailable_entity(self) -> tuple[str, str] | None:
         for entity_id in (self.a, self.b):
             state = self.hass.states.get(entity_id)
-            if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-                return False
-        return True
+            if state is None:
+                return entity_id, "missing"
+            if state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                return entity_id, state.state
+        return None
+
+    def _ready(self) -> bool:
+        return self._unavailable_entity() is None
 
     async def _run(self, _now) -> None:
         self._debounce = None
         if self._stopped:
             return
         trigger, self._pending_trigger = self._pending_trigger, None
-        if not self._ready():
-            # Entities are not loaded yet (e.g. at startup); a state change or retry follows
-            _LOGGER.debug("Lists not ready, retrying in %s s", RETRY_SECONDS)
+        unavailable = self._unavailable_entity() if not self._ready() else None
+        if unavailable is not None:
+            entity_id, entity_state = unavailable
+            changed = (
+                self._status["state"] != "waiting"
+                or self._status["waiting_entity"] != entity_id
+                or self._status["waiting_state"] != entity_state
+            )
+            await self._set_status(
+                "waiting",
+                waiting_entity=entity_id,
+                waiting_state=entity_state,
+            )
+            if changed:
+                _LOGGER.warning(
+                    "To-do list %s is not ready (state=%s); synchronization is paused",
+                    entity_id,
+                    entity_state,
+                )
             self._schedule(trigger, RETRY_SECONDS)
             return
         async with self._lock:
             if self._stopped:
                 return
             self._last_synced_items = 0
-            await self._set_status("syncing", persist=False, synced_items=0)
+            await self._set_status(
+                "syncing",
+                persist=False,
+                synced_items=0,
+                waiting_entity=None,
+                waiting_state=None,
+            )
             try:
                 write_failed = await self._sync(trigger)
             except _TodoListReadError:
