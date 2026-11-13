@@ -104,7 +104,7 @@ To-do Sync creates a diagnostic sensor for each configured list pair. The sensor
 | `success` | The latest run completed successfully. |
 | `error` | The latest run encountered a read or write error. |
 
-The sensor also exposes these attributes:
+Automations that evaluate the sensor state should account for the additional `held_back` state. The sensor also exposes these attributes:
 
 - `last_success`: Timestamp of the last fully successful synchronization.
 - `last_error`: Timestamp of the latest synchronization error.
