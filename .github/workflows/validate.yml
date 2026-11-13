@@ -52,7 +52,7 @@ jobs:
           run_hacs=false
           while IFS= read -r file; do
             case "$file" in
-              README*|hacs.json|custom_components/todo_sync/manifest.json|custom_components/todo_sync/brand/*|.github/workflows/validate.yml)
+              README*|hacs.json|custom_components/todo_sync/manifest.json|custom_components/todo_sync/brand/*)
                 run_hacs=true
                 break
                 ;;
