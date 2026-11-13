@@ -100,18 +100,21 @@ To-do Sync creates a diagnostic sensor for each configured list pair. The sensor
 | :--- | :--- |
 | `idle` | No synchronization is currently running and no safety hold is active. |
 | `syncing` | A synchronization run is in progress. |
+| `waiting` | One of the configured to-do entities is missing or currently `unknown`/`unavailable`; synchronization is paused until it becomes available. |
 | `held_back` | A completely empty list is being verified against the last snapshot; no list changes are applied during this hold. |
 | `success` | The latest run completed successfully. |
 | `error` | The latest run encountered a read or write error. |
 
-Automations that evaluate the sensor state should account for the additional `held_back` state. The sensor also exposes these attributes:
+Automations that evaluate the sensor state should account for the additional `waiting` and `held_back` states. The sensor also exposes these attributes:
 
 - `last_success`: Timestamp of the last fully successful synchronization.
 - `last_error`: Timestamp of the latest synchronization error.
 - `synced_items`: Number of items successfully created, updated, or removed in the latest run.
 - `last_error_type`: Technical error category (for example, `WriteError` or `TodoListReadError`).
+- `waiting_entity`: Entity ID of the to-do list that is preventing synchronization while the sensor is in `waiting`; `None` otherwise.
+- `waiting_state`: Observed state of that entity (`missing`, `unknown`, or `unavailable`); `None` otherwise.
 
-Status history is stored locally and restored after a Home Assistant restart. A run that was interrupted by a restart is restored as `idle`, not as actively syncing. An active `held_back` state is restored; because the confirmation timer is in memory, the verification window starts again when the lists are checked after restart. The safety brake applies only when a list is completely empty while open items remain in the snapshot; partial deletions are not delayed. A held-back run does not update `last_success`. The sensor does not expose list entity IDs, item names, descriptions, or task contents.
+Status history is stored locally and restored after a Home Assistant restart. A run that was interrupted by a restart is restored as `idle`, not as actively syncing. An active `held_back` state is restored; because the confirmation timer is in memory, the verification window starts again when the lists are checked after restart. The safety brake applies only when a list is completely empty while open items remain in the snapshot; partial deletions are not delayed. A held-back run does not update `last_success`. The sensor exposes the affected entity ID and its observed state only while synchronization is in the `waiting` state, through `waiting_entity` and `waiting_state`. It does not expose item names, descriptions, or task contents.
 
 ---
 
@@ -156,7 +159,7 @@ Snapshots are written only when their persisted data changes. Transient `syncing
 
 ## 🔍 Troubleshooting & Debug Logging
 
-At startup, the integration automatically waits until both `todo` entities are available. Debug logging provides privacy-safe operational context, including list item counts, snapshot size, whether a run was event-triggered or periodic, the operation type (copy or delete), destination side (A or B), skipped completed-item history, and retry timing. Error logs include a generic operation description and exception class, but deliberately omit exception tracebacks and exception messages because providers may include item titles or service data in them. List entity IDs, item names, descriptions, and task contents are not written by this integration. To inspect this diagnostic information, enable debug logging:
+If either configured `todo` entity is missing, `unknown`, or `unavailable`, the sensor enters `waiting`, identifies the affected entity through its diagnostic attributes, and pauses synchronization. The integration retries every `30 seconds` and resumes automatically when both entities are available again. A warning is logged only when the unavailable condition or affected entity changes, avoiding repeated identical warnings. At startup, the integration uses the same waiting behavior until both `todo` entities are available. Debug logging provides privacy-safe operational context, including list item counts, snapshot size, whether a run was event-triggered or periodic, the operation type (copy or delete), destination side (A or B), skipped completed-item history, and retry timing. Error logs include a generic operation description and exception class, but deliberately omit exception tracebacks and exception messages because providers may include item titles or service data in them. List entity IDs, item names, descriptions, and task contents are not written by this integration. To inspect this diagnostic information, enable debug logging:
 
 **Option A: Temporary via UI**  
 Go to **Developer tools** → **Actions** → call `logger.set_level`:
