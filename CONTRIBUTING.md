@@ -25,20 +25,21 @@ The project tests run with Python 3.13 and Home Assistant's custom-component tes
    PYTHONPATH=. pytest -q
    ```
 
-The same test command is used by the GitHub Actions validation workflow. The workflow installs the test dependencies with `uv` and also runs Home Assistant's hassfest validation and HACS validation.
+The GitHub Actions validation workflow installs the test and lint dependencies with `uv`, runs `ruff check .`, runs `pytest -q`, and performs Home Assistant's hassfest validation. HACS validation runs when repository or integration metadata changes (and on pushes to `main`, scheduled runs, and manual runs).
 
 ## Project structure
 
 - `custom_components/todo_sync/__init__.py`: synchronization engine, lifecycle, event handling, snapshot storage, conflict resolution and retries.
 - `custom_components/todo_sync/config_flow.py`: initial list selection and periodic interval options.
 - `custom_components/todo_sync/button.py`: the per-configuration **Sync now** button.
+- `custom_components/todo_sync/sensor.py`: the per-configuration diagnostic synchronization-status sensor.
 - `custom_components/todo_sync/const.py`: integration domain, configuration keys and shared constants.
 - `custom_components/todo_sync/translations/`: English and German UI strings.
 - `tests/`: automated tests for synchronization behavior.
 
 ## Synchronization model
 
-To-do items are matched by their normalized name: leading/trailing whitespace is removed and matching is case-insensitive. The integration stores a snapshot of the last successfully synchronized state and compares both current lists against it (a three-way comparison).
+To-do items are matched by the combination of normalized name and description. Leading/trailing whitespace is removed from each field and matching is case-insensitive. Items with the same name but different descriptions are independent; exact duplicates (same normalized name and description) are treated as one logical item. The integration stores a snapshot of the last successfully synchronized state and compares both current lists against it (a three-way comparison). For providers without description support, the title is split at the first space: the first word is the name and the remainder is the description.
 
 This snapshot is important: it lets the integration distinguish a change on one side from a conflict where both sides changed. If both sides changed, the list that triggered the run wins; a periodic run without a triggering list defaults to List A.
 
@@ -46,7 +47,7 @@ A few behaviors are intentional:
 
 - Both lists are read before any changes are applied. A failed read must not be interpreted as an empty list.
 - Completed items are treated as provider history and are not recreated or deleted on the other list when absent there.
-- A sudden disappearance of at least five open items and more than half of the open snapshot is held back for six minutes before it is accepted.
+- If a list appears completely empty while the snapshot still contains open items, synchronization is held back for six minutes to guard against a transient or incomplete provider read. If the list is still empty after that confirmation window, the empty result is accepted. Partial deletions are synchronized immediately; there is no item-count or percentage threshold.
 - Read and write failures are retried with bounded exponential backoff, starting at 30 seconds and capped at 300 seconds. Failed item writes keep their previous snapshot value so the next run can detect and retry the outstanding change.
 
 Please preserve these safety properties when changing the synchronization flow. Add a regression test whenever a change affects conflict resolution, deletion handling, snapshots, or retries.
