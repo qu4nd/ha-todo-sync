@@ -384,16 +384,22 @@ class TodoSyncer:
                 created_item = next(
                     (
                         item for item in refreshed
-                        if item.get("uid") not in previous_uids
-                        and item["summary"] == title
+                        if item["summary"] == title
                         and (item.get("description") or "").strip() == expected_description
-                        and item.get("uid")
+                        and (
+                            item.get("uid") not in previous_uids
+                            if item.get("uid")
+                            else not any(
+                                current_item["title"] == title
+                                for current_item in current.values()
+                            )
+                        )
                     ),
                     None,
                 )
                 if created_item is None:
                     raise RuntimeError("Could not safely identify newly created to-do item")
-                existing["uid"] = created_item["uid"]
+                existing["uid"] = created_item.get("uid")
         data = {"entity_id": entity_id, "item": service_item(existing)}
         if existing["status"] != target["status"]:
             data["status"] = target["status"]
