@@ -121,7 +121,7 @@ jobs:
           set -euo pipefail
 
           pr="$(gh api "repos/$REPOSITORY/pulls/$PR_NUMBER")"
-          author="$(jq -r '.user.login' <<< "$pr")"
+          author_type="$(jq -r '.user.type' <<< "$pr")"
           base_branch="$(jq -r '.base.ref' <<< "$pr")"
           head_branch="$(jq -r '.head.ref' <<< "$pr")"
           head_repo="$(jq -r '.head.repo.full_name // ""' <<< "$pr")"
@@ -129,7 +129,7 @@ jobs:
           is_draft="$(jq -r '.draft' <<< "$pr")"
           merged="$(jq -r '.merged' <<< "$pr")"
 
-          if [[ "$author" != "github-actions[bot]" ||
+          if [[ "$author_type" != "Bot" ||
                 "$base_branch" != "main" ||
                 "$head_repo" != "$REPOSITORY" ||
                 ! "$head_branch" =~ ^automation/release-v[0-9]+\.[0-9]+\.[0-9]+$ ||
