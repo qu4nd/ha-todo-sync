@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from homeassistant.config_entries import ConfigEntry
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.todo_sync import (
@@ -466,7 +465,6 @@ async def test_completed_history_is_not_recreated(syncer):
 @pytest.mark.asyncio
 async def test_failed_apply_keeps_previous_snapshot_for_retry(syncer):
     old = item("Milch", description="3")
-    changed = item("Milch", status="completed", description="3")
     syncer._snapshot = {_identity("Milch", "3"): old}
     syncer._fetch = AsyncMock(
         side_effect=[
