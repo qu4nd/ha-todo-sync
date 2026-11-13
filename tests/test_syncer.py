@@ -42,10 +42,16 @@ def test_split_title_extracts_quantity_and_unit(syncer):
 
 
 @pytest.mark.parametrize(
-    "title", ["Pizza 4 Käse", "Pizza 4 Stagioni", "Windows 11 Pro"]
+    ("title", "expected"),
+    [
+        ("Pizza 4 Käse", ("Pizza", "4 Käse")),
+        ("Pizza 4 Stagioni", ("Pizza", "4 Stagioni")),
+        ("Formel 1", ("Formel", "1")),
+        ("Windows 11 Pro", ("Windows", "11 Pro")),
+    ],
 )
-def test_split_title_preserves_numbered_names_without_known_mapping(syncer, title):
-    assert syncer._split_title(title, {}) == (title, "")
+def test_split_title_extracts_numbered_details(syncer, title, expected):
+    assert syncer._split_title(title, {}) == expected
 
 
 @pytest.mark.parametrize(
@@ -134,7 +140,7 @@ def test_parse_alexa_titles_uses_known_name_details_pairs(syncer):
     }
 
 
-def test_migrate_repairs_legacy_ambiguous_number_word_split(syncer):
+def test_migrate_preserves_name_and_numeric_detail_pair(syncer):
     old = {
         "pizza": {
             "title": "Pizza 4 Käse",
@@ -162,7 +168,7 @@ def test_migrate_name_keyed_snapshot(syncer):
     }
 
 
-def test_parse_title_only_provider_preserves_pizza_names(syncer):
+def test_parse_title_only_provider_splits_pizza_details(syncer):
     syncer._supports_description = lambda _entity_id: False
 
     parsed = syncer._parse(
