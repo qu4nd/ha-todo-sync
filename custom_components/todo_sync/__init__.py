@@ -11,7 +11,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -92,12 +91,6 @@ MASS_DELETE_MIN = 5
 CONFIRM_SECONDS = 360  # longer than the slowest source poll (Alexa: 300 s)
 DONE = "completed"
 OPEN = "needs_action"
-_QTY_RE = re.compile(
-    r"^(.+?)\s+(\d+(?:[.,]\d+)?(?:\s*(?:kg|g|mg|l|ml|cl|dl|stk\.?|stück))?(?:\s+.*)?)$",
-    re.IGNORECASE,
-)
-
-
 def _key(summary: str) -> str:
     return summary.strip().casefold()
 
@@ -756,25 +749,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 raw[entity_id] = await self._fetch(entity_id)
             except Exception as err:  # noqa: BLE001
                 raise _TodoListReadError(entity_id) from err
-        # Exact "name" and "name details" titles known from description-capable lists / last sync
-        # Lists without description support encode details in the title. Remember exact
-        # name/details pairs from the snapshot and capable lists before parsing either side,
-        # so a previously known title is not split differently on the other side.
-        known: dict[str, tuple[str, str]] = {}
-
-        def learn(name: str, desc: str) -> None:
-            known[_key(name)] = (name, "")
-            if desc:
-                known[_key(f"{name} {desc}")] = (name, desc)
-
-        for s in self._snapshot.values():
-            learn(s["name"], s.get("description", ""))
-        for e, entries in raw.items():
-            if self._supports_description(e):
-                for i in entries:
-                    learn(i["summary"].strip(), (i.get("description") or "").strip())
-        items_a = self._parse(self.a, raw[self.a], known)
-        items_b = self._parse(self.b, raw[self.b], known)
+        # Providers without description support encode details after the first
+        # word in the title. Use the same deterministic parsing on every sync.
+        items_a = self._parse(self.a, raw[self.a], {})
+        items_b = self._parse(self.b, raw[self.b], {})
         # A sudden disappearance of most open items can be a transient provider/API
         # read failure. Do not propagate those deletions until the same result is seen
         # again after the confirmation window.
