@@ -778,3 +778,41 @@ async def test_successful_sync_resets_write_retry_backoff(syncer):
     await syncer._run(None)
 
     assert syncer._retry_attempt == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("state", "expected_state"),
+    [(None, "missing"), ("unavailable", "unavailable"), ("unknown", "unknown")],
+)
+async def test_unready_list_is_exposed_in_status(hass, syncer, state, expected_state):
+    hass.states.async_set("todo.a", "ready")
+    if state is not None:
+        hass.states.async_set("todo.b", state)
+    scheduled = []
+    syncer._schedule = lambda trigger, delay: scheduled.append((trigger, delay))
+
+    await syncer._run(None)
+
+    assert syncer.status == "waiting"
+    assert syncer.status_attributes["waiting_entity"] == "todo.b"
+    assert syncer.status_attributes["waiting_state"] == expected_state
+    assert scheduled == [(None, RETRY_SECONDS)]
+
+
+@pytest.mark.asyncio
+async def test_unready_list_status_clears_when_list_returns(hass, syncer):
+    hass.states.async_set("todo.a", "ready")
+    hass.states.async_set("todo.b", "unavailable")
+    syncer._schedule = Mock()
+    await syncer._run(None)
+
+    assert syncer.status == "waiting"
+
+    hass.states.async_set("todo.b", "0")
+    syncer._sync = AsyncMock(return_value=False)
+    await syncer._run(None)
+
+    assert syncer.status == "success"
+    assert syncer.status_attributes["waiting_entity"] is None
+    assert syncer.status_attributes["waiting_state"] is None
