@@ -24,6 +24,7 @@ def syncer(hass):
     )
     instance = TodoSyncer(hass, entry)
     instance._store.async_save = AsyncMock()
+    instance._store.async_delay_save = Mock()
     return instance
 
 
