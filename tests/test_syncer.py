@@ -153,7 +153,6 @@ def test_parse_keeps_same_name_with_different_descriptions(syncer):
             {"summary": "Pizza", "status": "needs_action", "description": "4 Käse", "uid": "uid-1"},
             {"summary": "Pizza", "status": "needs_action", "description": "4 Stagioni", "uid": "uid-2"},
         ],
-        {},
     )
 
     assert set(parsed) == {
