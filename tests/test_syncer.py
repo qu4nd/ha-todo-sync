@@ -123,7 +123,7 @@ def test_split_title_uses_first_word_for_numbered_and_text_details(syncer, title
     ],
 )
 def test_split_title_extracts_numeric_quantities(syncer, title, expected):
-    assert syncer._split_title(title, {}) == expected
+    assert syncer._split_title(title) == expected
 
 
 def test_parse_preserves_description_when_supported(syncer, hass):
@@ -172,7 +172,7 @@ def test_parse_keeps_same_name_with_different_descriptions(syncer):
     ],
 )
 def test_split_title_handles_text_details(syncer, title, expected):
-    assert syncer._split_title(title, {}) == expected
+    assert syncer._split_title(title) == expected
 
 
 def test_parse_alexa_titles_splits_name_and_details(syncer):
