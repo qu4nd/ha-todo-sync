@@ -95,6 +95,7 @@ class TodoSyncer:
         self._status_listeners = []
         self._persisted_status = dict(self._status)
         self._last_saved_data: dict | None = None
+        self._last_scheduled_data: dict | None = None
 
     async def async_start(self) -> None:
         data = await self._store.async_load()
@@ -183,7 +184,10 @@ class TodoSyncer:
         self._notify_status()
         if persist:
             self._persisted_status = dict(self._status)
-            self._store.async_delay_save(self._store_data, 5)
+            data = self._store_data()
+            if data != self._last_saved_data and data != self._last_scheduled_data:
+                self._last_scheduled_data = copy.deepcopy(data)
+                self._store.async_delay_save(self._store_data, 5)
 
     @staticmethod
     def _now() -> str:
