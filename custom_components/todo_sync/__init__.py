@@ -1,4 +1,4 @@
-"""Bidirectional sync between two Home Assistant to-do lists (title + status).
+"""Bidirectional sync between two Home Assistant to-do lists (item names, descriptions, and status).
 
 The integration is intentionally centered around TodoSyncer: it reads both lists,
 compares them with the last successfully synchronized snapshot, applies the
