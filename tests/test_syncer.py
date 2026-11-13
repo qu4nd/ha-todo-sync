@@ -53,11 +53,9 @@ def test_split_title_uses_first_word_as_identity(syncer):
         ("Windows 11 Pro", ("Windows", "11 Pro")),
         ("gelbe Tomaten", ("gelbe", "Tomaten")),
         ("rote Zwiebeln", ("rote", "Zwiebeln")),
-        ("gelbe Tomaten", ("gelbe", "Tomaten")),
-        ("rote Zwiebeln", ("rote", "Zwiebeln")),
     ],
 )
-def test_split_title_extracts_numbered_details(syncer, title, expected):
+def test_split_title_uses_first_word_for_numbered_and_text_details(syncer, title, expected):
     assert syncer._split_title(title, {}) == expected
 
 
@@ -74,7 +72,7 @@ def test_split_title_extracts_numeric_quantities(syncer, title, expected):
     assert syncer._split_title(title, {}) == expected
 
 
-def test_split_title_prefers_exact_known_title(syncer):
+def test_split_title_is_independent_of_known_title_hints(syncer):
     known = {"milch 3": ("Milch", "3")}
     assert syncer._split_title("Milch 3", known) == ("Milch", "3")
 
