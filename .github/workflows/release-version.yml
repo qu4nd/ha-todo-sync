@@ -14,8 +14,7 @@ on:
         default: patch
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   prepare:
@@ -24,6 +23,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Bump manifest version
         id: version
@@ -71,9 +72,20 @@ jobs:
           print(f"Prepared version {version}")
           PY
 
+      - name: Create GitHub App installation token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: qu4nd
+          repositories: ha-todo-sync
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Create version bump pull request
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ steps.version.outputs.new_version }}
         run: |
           branch="automation/release-v${VERSION}"
@@ -92,6 +104,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git switch -C "$branch"
           git add custom_components/todo_sync/manifest.json
           git commit -m "chore: bump version to v${VERSION}"
