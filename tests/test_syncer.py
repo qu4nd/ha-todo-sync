@@ -626,6 +626,35 @@ def test_empty_list_suspect_clearing_resets_confirmation(syncer):
 
 
 @pytest.mark.asyncio
+async def test_sync_holds_back_when_provider_list_loses_all_three_open_items(syncer):
+    items = {
+        _identity(name, ""): item(name)
+        for name in ("Apfel", "Brot", "Milch")
+    }
+    syncer._snapshot = dict(items)
+    syncer._fetch = AsyncMock(
+        side_effect=[
+            [],
+            [
+                {"summary": name, "status": "needs_action"}
+                for name in ("Apfel", "Brot", "Milch")
+            ],
+        ]
+    )
+    syncer._supports_description = lambda _entity_id: True
+    syncer._apply = AsyncMock()
+    scheduled = []
+    syncer._schedule = lambda trigger, delay: scheduled.append((trigger, delay))
+
+    await syncer._sync("todo.a")
+
+    syncer._apply.assert_not_awaited()
+    assert syncer._snapshot == items
+    assert syncer._sync_deferred is True
+    assert scheduled == [("todo.a", 370)]
+
+
+@pytest.mark.asyncio
 async def test_sync_holds_back_when_list_is_empty(syncer):
     old = item("Milk")
     syncer._snapshot = {_identity("Milk", ""): old}
