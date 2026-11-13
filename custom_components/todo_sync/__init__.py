@@ -337,16 +337,14 @@ class TodoSyncer:
         )
         return resp[entity_id]["items"]
 
-    def _parse(
-        self, entity_id: str, raw: list[dict], known: dict[str, tuple[str, str]]
-    ) -> dict[str, dict]:
+    def _parse(self, entity_id: str, raw: list[dict]) -> dict[str, dict]:
         items: dict[str, dict] = {}
         supports = self._supports_description(entity_id)
         for item in raw:
             title = item["summary"].strip()
             name, desc = title, (item.get("description") or "").strip()
             if not supports:
-                name, desc = self._split_title(title, known)
+                name, desc = self._split_title(title)
             if name:
                 parsed_item = {
                     "title": title,
@@ -360,7 +358,7 @@ class TodoSyncer:
         return items
 
     @staticmethod
-    def _split_title(title: str, known: dict[str, tuple[str, str]] | None = None) -> tuple[str, str]:
+    def _split_title(title: str) -> tuple[str, str]:
         """Use the first word as the item name and everything after it as details."""
         parts = title.strip().split(maxsplit=1)
         if not parts:
@@ -566,8 +564,8 @@ class TodoSyncer:
         # Providers without description support encode details after the first
         # word in the title. This deterministic rule keeps identity consistent
         # regardless of which provider supplied the item.
-        items_a = self._parse(self.a, raw[self.a], {})
-        items_b = self._parse(self.b, raw[self.b], {})
+        items_a = self._parse(self.a, raw[self.a])
+        items_b = self._parse(self.b, raw[self.b])
         self._resolve_pending_writes(items_a, items_b)
         # A completely empty list can be a transient provider/API read failure.
         # Do not propagate its deletions until the same result is seen again after
