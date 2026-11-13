@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.todo_sync import TodoSyncer, _TodoListReadError
+from custom_components.todo_sync import TodoSyncer, _TodoListReadError, _identity
 from custom_components.todo_sync.const import CONF_LIST_A, CONF_LIST_B
 
 
@@ -63,7 +63,7 @@ async def test_restart_restores_history_but_not_syncing_state(syncer, hass):
     assert syncer.status == "idle"
     assert syncer.status_attributes["last_success"] == "2026-11-12T12:00:00+00:00"
     assert syncer.status_attributes["synced_items"] == 3
-    assert syncer._snapshot == {"milk": {"name": "Milk"}}
+    assert syncer._snapshot == {_identity("Milk", ""): {"name": "Milk"}}
 
 
 @pytest.mark.asyncio

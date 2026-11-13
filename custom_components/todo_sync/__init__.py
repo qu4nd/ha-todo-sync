@@ -9,6 +9,7 @@ makes conflict handling and retries consistent for every supported to-do provide
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 import time
@@ -51,6 +52,13 @@ def _key(summary: str) -> str:
     return summary.strip().casefold()
 
 
+def _identity(name: str, description: str) -> str:
+    """Return a stable, unambiguous identity for a name/details pair."""
+    return json.dumps(
+        [_key(name), _key(description)], ensure_ascii=False, separators=(",", ":")
+    )
+
+
 class _TodoListReadError(Exception):
     """Raised when fetching either source list fails before sync changes are applied."""
 
@@ -65,7 +73,7 @@ class TodoSyncer:
         self.interval: int = int(entry.options.get(CONF_INTERVAL, SCAN_INTERVAL_MINUTES))
         self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
         self._lock = asyncio.Lock()
-        # Last successfully synchronized state, keyed by normalized item name.
+        # Last successfully synchronized state, keyed by normalized name + description.
         # Comparing both live lists with this baseline lets us tell which side changed.
         self._snapshot: dict[str, dict] = {}
         self._unsubs: list[CALLBACK_TYPE] = []
@@ -88,7 +96,7 @@ class TodoSyncer:
 
     async def async_start(self) -> None:
         data = await self._store.async_load()
-        self._snapshot = (data or {}).get("snapshot", {})
+        self._snapshot = self._migrate_snapshot((data or {}).get("snapshot", {}))
         stored_status = (data or {}).get("status", {})
         self._status.update(
             {key: stored_status[key] for key in self._status if key in stored_status}
@@ -131,6 +139,18 @@ class TodoSyncer:
     def _notify_status(self) -> None:
         for listener in tuple(self._status_listeners):
             listener()
+
+    @staticmethod
+    def _migrate_snapshot(snapshot: dict) -> dict[str, dict]:
+        """Upgrade name-keyed snapshots to the name/details identity format."""
+        migrated: dict[str, dict] = {}
+        for old_key, item in snapshot.items():
+            if not isinstance(item, dict) or not item.get("name"):
+                migrated[old_key] = item
+                continue
+            key = _identity(item["name"], item.get("description", ""))
+            migrated[key] = item
+        return migrated
 
     async def _save_store(self) -> None:
         await self._store.async_save(
@@ -272,12 +292,15 @@ class TodoSyncer:
             if not supports:
                 name, desc = self._split_title(title, known)
             if name:
-                items[_key(name)] = {
+                parsed_item = {
                     "title": title,
                     "name": name,
                     "status": item["status"],
                     "description": desc,
                 }
+                if item.get("uid"):
+                    parsed_item["uid"] = item["uid"]
+                items[_identity(name, desc)] = parsed_item
         return items
 
     @staticmethod
@@ -311,12 +334,26 @@ class TodoSyncer:
 
     async def _apply(self, entity_id: str, current: dict, key: str, target: dict | None) -> bool:
         existing = current.get(key)
+
+        def service_item(item: dict) -> str:
+            """Prefer the provider UID; a summary is safe only when it is unique."""
+            if item.get("uid"):
+                return item["uid"]
+            same_title = sum(
+                candidate["title"] == item["title"] for candidate in current.values()
+            )
+            if same_title > 1:
+                raise RuntimeError(
+                    "Cannot safely address duplicate to-do summaries without item UIDs"
+                )
+            return item["title"]
+
         # A missing target means the source side deleted this item. Remove it only
         # when it exists on the destination; otherwise there is nothing to apply.
         if target is None:
             if existing:
                 await self._call(
-                    "remove_item", {"entity_id": entity_id, "item": existing["title"]}
+                    "remove_item", {"entity_id": entity_id, "item": service_item(existing)}
                 )
                 return True
             return False
@@ -326,6 +363,9 @@ class TodoSyncer:
             # Create the item first. Some providers need a follow-up update to set
             # its status, so the common update logic below also handles new items.
             title = self._title(entity_id, target["name"], target["description"])
+            previous_uids = {
+                item.get("uid") for item in current.values() if item.get("uid")
+            }
             data = {"entity_id": entity_id, "item": title}
             if supports and target["description"]:
                 data["description"] = target["description"]
@@ -335,8 +375,34 @@ class TodoSyncer:
                 "name": target["name"],
                 "status": OPEN,
                 "description": target["description"],
+                "uid": None,
             }
-        data = {"entity_id": entity_id, "item": existing["title"]}
+            # add_item cannot set a completed status. Resolve the newly created
+            # item's UID before updating it, so another item with the same summary
+            # but different details is never modified by mistake.
+            if target["status"] != OPEN:
+                refreshed = await self._fetch(entity_id)
+                expected_description = target["description"] if supports else ""
+                created_item = next(
+                    (
+                        item for item in refreshed
+                        if item["summary"] == title
+                        and (item.get("description") or "").strip() == expected_description
+                        and (
+                            item.get("uid") not in previous_uids
+                            if item.get("uid")
+                            else not any(
+                                current_item["title"] == title
+                                for current_item in current.values()
+                            )
+                        )
+                    ),
+                    None,
+                )
+                if created_item is None:
+                    raise RuntimeError("Could not safely identify newly created to-do item")
+                existing["uid"] = created_item.get("uid")
+        data = {"entity_id": entity_id, "item": service_item(existing)}
         if existing["status"] != target["status"]:
             data["status"] = target["status"]
         if existing["description"] != target["description"]:
@@ -436,7 +502,7 @@ class TodoSyncer:
 
             if sa == sb:
                 if a:
-                    new_snap[key] = a
+                    new_snap[key] = {k: v for k, v in a.items() if k != "uid"}
                 continue
 
             changed_a, changed_b = sa != ss, sb != ss
@@ -475,7 +541,8 @@ class TodoSyncer:
                     new_snap[key] = s
                 continue
             if source:
-                new_snap[key] = source
+                # Provider UIDs are local to each list and must not enter the shared snapshot.
+                new_snap[key] = {k: v for k, v in source.items() if k != "uid"}
 
         self._snapshot = new_snap
         # Persist even if unload started during this run: list changes have already been
