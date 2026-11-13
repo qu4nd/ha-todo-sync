@@ -134,6 +134,26 @@ def test_parse_alexa_titles_uses_known_name_details_pairs(syncer):
     }
 
 
+def test_migrate_repairs_legacy_ambiguous_number_word_split(syncer):
+    old = {
+        "pizza": {
+            "title": "Pizza 4 Käse",
+            "name": "Pizza",
+            "status": "needs_action",
+            "description": "4 Käse",
+        }
+    }
+
+    assert syncer._migrate_snapshot(old) == {
+        _identity("Pizza 4 Käse", ""): {
+            "title": "Pizza 4 Käse",
+            "name": "Pizza 4 Käse",
+            "status": "needs_action",
+            "description": "",
+        }
+    }
+
+
 def test_migrate_name_keyed_snapshot(syncer):
     old = {"pizza": item("Pizza", description="4 Käse")}
 
