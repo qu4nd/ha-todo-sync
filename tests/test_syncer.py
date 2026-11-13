@@ -56,7 +56,7 @@ def test_parse_preserves_description_when_supported(syncer, hass):
     )
 
     assert parsed == {
-        _identity("Milch", ""): {
+        _identity("Milch", "3"): {
             "title": "Milch",
             "name": "Milch",
             "status": "needs_action",
@@ -147,9 +147,9 @@ async def test_new_item_on_a_is_applied_to_b(syncer):
 
     await syncer._sync("todo.a")
 
-    syncer._apply.assert_awaited_once_with("todo.b", {}, _identity("Milch", ""), source)
-    assert syncer._snapshot == {_identity("Milch", ""): source}
-    syncer._store.async_save.assert_awaited_once_with({"snapshot": {_identity("Milch", ""): source}, "status": syncer._status})
+    syncer._apply.assert_awaited_once_with("todo.b", {}, _identity("Milch", "3"), source)
+    assert syncer._snapshot == {_identity("Milch", "3"): source}
+    syncer._store.async_save.assert_awaited_once_with({"snapshot": {_identity("Milch", "3"): source}, "status": syncer._status})
 
 
 @pytest.mark.asyncio
@@ -169,20 +169,20 @@ async def test_periodic_conflict_defaults_to_list_a(syncer):
 
     await syncer._sync(None)
 
-    syncer._apply.assert_awaited_once_with("todo.b", {_identity("Milch", ""): changed_b}, _identity("Milch", ""), changed_a)
+    syncer._apply.assert_awaited_once_with("todo.b", {_identity("Milch", "3"): changed_b}, _identity("Milch", "3"), changed_a)
     assert syncer._snapshot == {_identity("Milch", "3"): changed_a}
 
 
 @pytest.mark.asyncio
 async def test_triggering_list_wins_conflict(syncer):
-    old = item("Milch")
+    old = item("Milch", description="3")
     changed_a = item("Milch", description="3")
-    changed_b = item("Milch", description="2")
-    syncer._snapshot = {_identity("Milch", ""): old}
+    changed_b = item("Milch", status="completed", description="3")
+    syncer._snapshot = {_identity("Milch", "3"): old}
     syncer._fetch = AsyncMock(
         side_effect=[
-            [{"summary": "Milch", "status": "completed", "description": "3"}],
             [{"summary": "Milch", "status": "needs_action", "description": "3"}],
+            [{"summary": "Milch", "status": "completed", "description": "3"}],
         ]
     )
     syncer._supports_description = lambda _entity_id: True
@@ -190,7 +190,7 @@ async def test_triggering_list_wins_conflict(syncer):
 
     await syncer._sync("todo.b")
 
-    syncer._apply.assert_awaited_once_with("todo.a", {_identity("Milch", ""): changed_a}, _identity("Milch", ""), changed_b)
+    syncer._apply.assert_awaited_once_with("todo.a", {_identity("Milch", "3"): changed_a}, _identity("Milch", "3"), changed_b)
     assert syncer._snapshot == {_identity("Milch", "3"): changed_b}
 
 
@@ -215,13 +215,13 @@ async def test_completed_history_is_not_recreated(syncer):
 
 @pytest.mark.asyncio
 async def test_failed_apply_keeps_previous_snapshot_for_retry(syncer):
-    old = item("Milch")
-    changed = item("Milch", description="3")
-    syncer._snapshot = {_identity("Milch", ""): old}
+    old = item("Milch", description="3")
+    changed = item("Milch", status="completed", description="3")
+    syncer._snapshot = {_identity("Milch", "3"): old}
     syncer._fetch = AsyncMock(
         side_effect=[
+            [{"summary": "Milch", "status": "completed", "description": "3"}],
             [{"summary": "Milch", "status": "needs_action", "description": "3"}],
-            [{"summary": "Milch", "status": "needs_action", "description": ""}],
         ]
     )
     syncer._supports_description = lambda _entity_id: True
@@ -231,7 +231,7 @@ async def test_failed_apply_keeps_previous_snapshot_for_retry(syncer):
 
     syncer._apply.assert_awaited_once()
     assert write_failed is True
-    assert syncer._snapshot == {_identity("Milch", ""): old}
+    assert syncer._snapshot == {_identity("Milch", "3"): old}
 
 
 @pytest.mark.asyncio
