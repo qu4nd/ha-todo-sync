@@ -46,10 +46,9 @@ CONFIRM_SECONDS = 360  # longer than the slowest source poll (Alexa: 300 s)
 DONE = "completed"
 OPEN = "needs_action"
 _QTY_RE = re.compile(
-    r"^(.+?)\s+(\d+(?:[.,]\d+)?(?:\s*(?:kg|g|mg|l|ml|cl|dl|stk\.?|stück))?)$",
+    r"^(.+?)\s+(\d+(?:[.,]\d+)?(?:\s*(?:kg|g|mg|l|ml|cl|dl|stk\.?|stück))?(?:\s+.*)?)$",
     re.IGNORECASE,
 )
-_AMBIGUOUS_NUMBER_WORD_RE = re.compile(r"^\d+(?:[.,]\d+)?\s+[^\W\d_]+\.?$", re.IGNORECASE)
 
 
 def _key(summary: str) -> str:
@@ -152,21 +151,6 @@ class TodoSyncer:
             if not isinstance(item, dict) or not item.get("name"):
                 migrated[old_key] = item
                 continue
-            # Older versions could split legitimate titles such as "Pizza 4 Käse"
-            # into name="Pizza" and description="4 Käse". The original provider title
-            # lets us distinguish that heuristic split from a real description: when
-            # title is the exact concatenation and the description is an ambiguous
-            # number + word, restore the complete title as the item name.
-            description = item.get("description", "")
-            title = item.get("title", "")
-            if (
-                description
-                and title
-                and _key(title) == _key(f"{item['name']} {description}")
-                and _AMBIGUOUS_NUMBER_WORD_RE.fullmatch(description)
-            ):
-                item = {**item, "name": title, "description": ""}
-                description = ""
             key = _identity(item["name"], description)
             migrated[key] = item
         return migrated
@@ -324,7 +308,7 @@ class TodoSyncer:
 
     @staticmethod
     def _split_title(title: str, known: dict[str, tuple[str, str]]) -> tuple[str, str]:
-        """Split "Milch 3" into name and details: exact known title first, else a trailing quantity."""
+        """Split a title at its trailing numeric detail; prefer an exact known name/details pair."""
         # Prefer an exact pair learned from the other list or the previous snapshot.
         # Only fall back to the quantity pattern for titles we have never seen before.
         if (hit := known.get(title.casefold())) is not None:
