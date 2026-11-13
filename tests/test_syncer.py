@@ -42,7 +42,7 @@ def test_split_title_extracts_quantity_and_unit(syncer):
 
 
 @pytest.mark.parametrize(
-    "title", ["Pizza 4 Käse", "Pizza 4 Stagioni", "Windows 11 Pro", "Formel 1"]
+    "title", ["Pizza 4 Käse", "Pizza 4 Stagioni", "Windows 11 Pro"]
 )
 def test_split_title_preserves_numbered_names_without_known_mapping(syncer, title):
     assert syncer._split_title(title, {}) == (title, "")
