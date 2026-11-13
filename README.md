@@ -22,7 +22,7 @@
 ## ✨ Features
 
 * 🔄 **True Two-Way Sync:** Adding, removing, checking, and unchecking items are synced in both directions using a persistent 3-way state snapshot.
-* ⚖️ **Smart Quantity & Details Bridging:** Automatically translates between lists *with* item descriptions (e.g., **Bring!**) and lists *without* them (e.g., **Alexa**).
+* ⚖️ **Smart Quantity & Details Bridging:** Automatically translates between lists *with* item descriptions (e.g., **Bring!**) and lists *without* them (e.g., **Alexa**). Items with the same name but different details remain separate.
 * ⚡ **Event-Driven + Periodic:** Reacts to Home Assistant list-change events (with a `3 s` debounce) and runs a configurable periodic fallback (`1–1440 min`, default `5 min`). End-to-end sync speed also depends on how quickly each provider updates its Home Assistant entity.
 * 🔘 **Ad-Hoc Sync Button:** Exposes a `Sync now` button entity per list pair for dashboards or custom automations.
 * 📊 **Synchronization Status:** Exposes a diagnostic sensor per list pair with the current sync state, last successful sync, last error timestamp, and number of changed items.
@@ -55,6 +55,7 @@ Lists like **Bring!** store quantities and notes in a dedicated `description` fi
 | **Add on Bring!** | **Item:** `Milch`<br>**Desc:** `3` | ➡️ | **Title:** `Milch 3` | Appends description to the title on lists without description support. |
 | **Add on Alexa** | **Item:** `Käse`<br>**Desc:** `200 g` | ⬅️ | **Title:** `Käse 200 g` | Splits trailing numbers + optional units (`2`, `200 g`, `0,5l`) into the description field. |
 | **Known Custom Text** | **Item:** `Test`<br>**Desc:** `bringdetails` | 🔄 | **Title:** `Test bringdetails` | Remembers exact known `Name Details` pairs from Bring! or the last snapshot—even without numbers. |
+| **Same Name, Different Details** | **Item:** `Pizza`<br>**Desc:** `4 Käse` and `4 Stagioni` | 🔄 | **Titles:** `Pizza 4 Käse` and `Pizza 4 Stagioni` | Uses the name + description pair as the identity, so neither entry overwrites the other. |
 
 ---
 
@@ -135,8 +136,9 @@ actions:
 
 ## ⚠️ Conflict Resolution & Limitations
 
-* **Conflict Priority:** Items are matched case-insensitively by name. If both lists modify the exact same item between syncs, the list that triggered the sync wins (on periodic timer runs, **List A** wins).
-* **Renaming Items:** Renaming an item's base name is processed as a deletion of the old name + creation of the new name.
+* **Conflict Priority:** Items are matched case-insensitively by the combination of name and description. Items with the same name but different descriptions remain independent. If both lists modify the exact same item between syncs, the list that triggered the sync wins (on periodic timer runs, **List A** wins).
+* **Renaming Items:** Changing an item's name or description is processed as a deletion of the old name/details pair + creation of the new pair.
+* **Exact Duplicates:** Two entries with exactly the same name and description are treated as one logical item; the Home Assistant sync model does not currently preserve duplicate multiplicity.
 * **Text-Only Details on Alexa:** Adding a *brand-new* item on Alexa with text-only details (e.g., `"Milch fettarm"` without numbers) is read as the full item name.
 * **Parentheses:** Parentheses in item names are not treated specially.
 
