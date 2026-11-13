@@ -17,6 +17,7 @@ def syncer(hass):
     )
     instance = TodoSyncer(hass, entry)
     instance._store.async_save = AsyncMock()
+    instance._store.async_delay_save = AsyncMock()
     return instance
 
 
@@ -37,9 +38,13 @@ async def test_status_is_persisted_and_notifies_listeners(syncer):
         "last_error_type": None,
     }
     assert notified == [True]
-    syncer._store.async_save.assert_awaited_once_with(
-        {"snapshot": {}, "status": syncer._status}
-    )
+    syncer._store.async_delay_save.assert_called_once()
+    data_func, delay = syncer._store.async_delay_save.call_args.args
+    assert delay == 5
+    assert data_func() == {
+        "snapshot": {}, "status": syncer._status, "pending_writes": {}
+    }
+    syncer._store.async_save.assert_not_awaited()
 
 
 @pytest.mark.asyncio
