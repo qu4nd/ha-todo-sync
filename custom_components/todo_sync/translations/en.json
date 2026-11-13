@@ -20,7 +20,14 @@
   "entity": {
     "sensor": {
       "sync_status": {
-        "name": "Synchronization status"
+        "name": "Synchronization status",
+        "state": {
+          "idle": "Idle",
+          "syncing": "Syncing",
+          "held_back": "On hold",
+          "success": "Success",
+          "error": "Error"
+        }
       }
     },
     "button": {
