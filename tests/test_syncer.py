@@ -223,7 +223,6 @@ def test_parse_title_only_provider_splits_pizza_details(syncer):
             {"summary": "Pizza 4 Käse", "status": "needs_action", "uid": "pizza-cheese"},
             {"summary": "Pizza 4 Stagioni", "status": "needs_action", "uid": "pizza-stagioni"},
         ],
-        {},
     )
 
     assert set(parsed) == {
