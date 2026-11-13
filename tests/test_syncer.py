@@ -142,7 +142,6 @@ def test_migrate_name_keyed_snapshot(syncer):
     }
 
 
-@pytest.mark.asyncio
 def test_parse_title_only_provider_preserves_pizza_names(syncer):
     syncer._supports_description = lambda _entity_id: False
 
@@ -184,6 +183,7 @@ async def test_sync_keeps_numbered_names_distinct_across_provider_types(syncer):
     }
 
 
+@pytest.mark.asyncio
 async def test_sync_preserves_two_items_with_same_name(syncer):
     syncer._fetch = AsyncMock(
         side_effect=[
