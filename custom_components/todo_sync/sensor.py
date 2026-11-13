@@ -25,6 +25,7 @@ class SyncStatusSensor(SensorEntity):
     _attr_has_entity_name = True
     _attr_translation_key = "sync_status"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_should_poll = False
     _attr_icon = "mdi:sync"
 
     def __init__(self, entry: ConfigEntry, syncer) -> None:
