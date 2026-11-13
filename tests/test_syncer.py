@@ -640,7 +640,6 @@ async def test_sync_holds_back_when_list_is_empty(syncer):
     assert syncer._sync_deferred is True
     assert scheduled == [("todo.a", 370)]
 
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failed_entity", ["todo.a", "todo.b"])
 async def test_failed_list_read_keeps_snapshot_and_does_not_apply_changes(
