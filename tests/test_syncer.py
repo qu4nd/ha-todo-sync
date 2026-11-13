@@ -36,6 +36,60 @@ def item(name, status="needs_action", description=""):
     }
 
 
+
+def test_pending_write_masks_stale_destination_read_until_provider_catches_up(syncer):
+    key = _identity("Milk", "")
+    before = item("Milk")
+    expected = item("Milk", status="completed")
+    syncer._track_pending_write("todo.b", key, before, expected)
+    items_a = {key: expected}
+    items_b = {key: before}
+
+    syncer._resolve_pending_writes(items_a, items_b)
+
+    assert syncer._val(items_b[key]) == syncer._val(expected)
+    assert syncer._pending_key("todo.b", key) in syncer._pending_writes
+
+    # Once the provider exposes the expected value, the expectation is acknowledged.
+    syncer._resolve_pending_writes(items_a, items_b)
+    assert syncer._pending_writes == {}
+
+
+def test_pending_write_does_not_hide_a_genuine_conflicting_edit(syncer):
+    key = _identity("Milk", "")
+    before = item("Milk")
+    expected = item("Milk", status="completed")
+    genuine_edit = item("Milk", description="oat")
+    syncer._track_pending_write("todo.b", key, before, expected)
+    items_a = {key: expected}
+    items_b = {key: genuine_edit}
+
+    syncer._resolve_pending_writes(items_a, items_b)
+
+    assert items_b[key] == genuine_edit
+    assert syncer._pending_writes == {}
+
+
+def test_pending_write_expires(syncer):
+    key = _identity("Milk", "")
+    syncer._track_pending_write("todo.b", key, item("Milk"), item("Milk", status="completed"))
+    pending_id = syncer._pending_key("todo.b", key)
+    syncer._pending_writes[pending_id]["expires"] = 0
+
+    syncer._resolve_pending_writes({key: item("Milk", status="completed")}, {key: item("Milk")})
+
+    assert syncer._pending_writes == {}
+
+
+@pytest.mark.asyncio
+async def test_unchanged_store_payload_is_not_written(syncer):
+    syncer._last_saved_data = syncer._store_data()
+
+    await syncer._save_store()
+
+    syncer._store.async_save.assert_not_awaited()
+
+
 def test_split_title_uses_first_word_as_identity(syncer):
     assert syncer._split_title("Milch 0,5 l") == ("Milch", "0,5 l")
     assert syncer._split_title("Eier 10") == ("Eier", "10")
