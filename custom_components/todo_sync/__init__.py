@@ -49,6 +49,7 @@ _QTY_RE = re.compile(
     r"^(.+?)\s+(\d+(?:[.,]\d+)?(?:\s*(?:kg|g|mg|l|ml|cl|dl|stk\.?|stück))?)$",
     re.IGNORECASE,
 )
+_AMBIGUOUS_NUMBER_WORD_RE = re.compile(r"^\d+(?:[.,]\d+)?\s+[^\W\d_]+\.?$", re.IGNORECASE)
 
 
 def _key(summary: str) -> str:
@@ -151,7 +152,22 @@ class TodoSyncer:
             if not isinstance(item, dict) or not item.get("name"):
                 migrated[old_key] = item
                 continue
-            key = _identity(item["name"], item.get("description", ""))
+            # Older versions could split legitimate titles such as "Pizza 4 Käse"
+            # into name="Pizza" and description="4 Käse". The original provider title
+            # lets us distinguish that heuristic split from a real description: when
+            # title is the exact concatenation and the description is an ambiguous
+            # number + word, restore the complete title as the item name.
+            description = item.get("description", "")
+            title = item.get("title", "")
+            if (
+                description
+                and title
+                and _key(title) == _key(f"{item['name']} {description}")
+                and _AMBIGUOUS_NUMBER_WORD_RE.fullmatch(description)
+            ):
+                item = {**item, "name": title, "description": ""}
+                description = ""
+            key = _identity(item["name"], description)
             migrated[key] = item
         return migrated
 
