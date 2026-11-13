@@ -244,7 +244,7 @@ class TodoSyncer:
         if self._stopped:
             return
         trigger, self._pending_trigger = self._pending_trigger, None
-        unavailable = self._unavailable_entity()
+        unavailable = self._unavailable_entity() if not self._ready() else None
         if unavailable is not None:
             entity_id, entity_state = unavailable
             changed = (
