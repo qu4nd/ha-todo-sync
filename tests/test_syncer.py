@@ -315,7 +315,18 @@ async def test_new_item_on_a_is_applied_to_b(syncer):
 
     syncer._apply.assert_awaited_once_with("todo.b", {}, _identity("Milch", "3"), source)
     assert syncer._snapshot == {_identity("Milch", "3"): source}
-    syncer._store.async_save.assert_awaited_once_with({"snapshot": {_identity("Milch", "3"): source}, "status": syncer._status})
+    syncer._store.async_save.assert_awaited_once_with({
+        "snapshot": {_identity("Milch", "3"): source},
+        "status": syncer._persisted_status,
+        "pending_writes": {
+            syncer._pending_key("todo.b", _identity("Milch", "3")): {
+                "entity_id": "todo.b", "key": _identity("Milch", "3"),
+                "before": None, "expected": ["needs_action", "3"],
+                "item": {"title": "Milch", "name": "Milch", "status": "needs_action", "description": "3"},
+                "expires": syncer._pending_writes[syncer._pending_key("todo.b", _identity("Milch", "3"))]["expires"],
+            }
+        },
+    })
 
 
 @pytest.mark.asyncio
