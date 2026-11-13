@@ -72,6 +72,47 @@ async def test_restart_restores_history_but_not_syncing_state(syncer, hass):
 
 
 @pytest.mark.asyncio
+async def test_restart_restores_pending_write_expectations(syncer):
+    pending = {
+        syncer._pending_key("todo.b", _identity("Milk", "")): {
+            "entity_id": "todo.b",
+            "key": _identity("Milk", ""),
+            "before": ["needs_action", ""],
+            "expected": ["completed", ""],
+            "item": {
+                "title": "Milk", "name": "Milk",
+                "status": "completed", "description": "",
+            },
+            "expires": 9999999999,
+        }
+    }
+    syncer._store.async_load = AsyncMock(
+        return_value={
+            "snapshot": {},
+            "status": {"state": "success"},
+            "pending_writes": pending,
+        }
+    )
+    syncer._schedule = lambda _trigger, _delay: None
+
+    await syncer.async_start()
+
+    assert syncer._pending_writes == pending
+
+
+@pytest.mark.asyncio
+async def test_stop_flushes_latest_snapshot(syncer):
+    syncer._snapshot = {_identity("Milk", ""): {
+        "title": "Milk", "name": "Milk",
+        "status": "needs_action", "description": "",
+    }}
+
+    await syncer.async_stop()
+
+    syncer._store.async_save.assert_awaited_once_with(syncer._store_data())
+
+
+@pytest.mark.asyncio
 async def test_read_failure_sets_non_sensitive_error_status(syncer):
     syncer._ready = lambda: True
     syncer._sync = AsyncMock(side_effect=_TodoListReadError("todo.private_list"))
