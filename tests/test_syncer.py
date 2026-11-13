@@ -151,12 +151,7 @@ def test_migrate_preserves_name_and_numeric_detail_pair(syncer):
     }
 
     assert syncer._migrate_snapshot(old) == {
-        _identity("Pizza 4 Käse", ""): {
-            "title": "Pizza 4 Käse",
-            "name": "Pizza 4 Käse",
-            "status": "needs_action",
-            "description": "",
-        }
+        _identity("Pizza", "4 Käse"): old["pizza"]
     }
 
 
@@ -181,8 +176,8 @@ def test_parse_title_only_provider_splits_pizza_details(syncer):
     )
 
     assert set(parsed) == {
-        _identity("Pizza 4 Käse", ""),
-        _identity("Pizza 4 Stagioni", ""),
+        _identity("Pizza", "4 Käse"),
+        _identity("Pizza", "4 Stagioni"),
     }
 
 
@@ -204,8 +199,8 @@ async def test_sync_keeps_numbered_names_distinct_across_provider_types(syncer):
 
     assert syncer._apply.await_count == 2
     assert set(syncer._snapshot) == {
-        _identity("Pizza 4 Käse", ""),
-        _identity("Pizza 4 Stagioni", ""),
+        _identity("Pizza", "4 Käse"),
+        _identity("Pizza", "4 Stagioni"),
     }
 
 
