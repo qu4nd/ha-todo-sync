@@ -48,6 +48,8 @@ def test_split_title_extracts_quantity_and_unit(syncer):
         ("Pizza 4 Stagioni", ("Pizza", "4 Stagioni")),
         ("Formel 1", ("Formel", "1")),
         ("Windows 11 Pro", ("Windows", "11 Pro")),
+        ("gelbe Tomaten", ("gelbe", "Tomaten")),
+        ("rote Zwiebeln", ("rote", "Zwiebeln")),
     ],
 )
 def test_split_title_extracts_numbered_details(syncer, title, expected):
