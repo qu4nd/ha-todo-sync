@@ -494,7 +494,7 @@ class TodoSyncer:
 
             if sa == sb:
                 if a:
-                    new_snap[key] = a
+                    new_snap[key] = {k: v for k, v in a.items() if k != "uid"}
                 continue
 
             changed_a, changed_b = sa != ss, sb != ss
