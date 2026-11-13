@@ -607,6 +607,15 @@ def test_changed_mass_delete_result_restarts_confirmation(syncer):
 
 
 
+def test_mass_delete_suspect_clearing_resets_confirmation(syncer):
+    suspects = frozenset({("todo.a", "milk")})
+    with patch("custom_components.todo_sync.time.monotonic", side_effect=[100.0, 200.0]):
+        assert syncer._hold_back(suspects) is True
+        assert syncer._hold_back(frozenset()) is False
+
+    assert syncer._suspect is None
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failed_entity", ["todo.a", "todo.b"])
 async def test_failed_list_read_keeps_snapshot_and_does_not_apply_changes(
