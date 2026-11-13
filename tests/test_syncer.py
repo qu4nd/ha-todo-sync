@@ -525,7 +525,9 @@ async def test_deleting_open_item_is_synced(syncer, trigger, fetch_results, dest
 
     await syncer._sync(trigger)
 
-    syncer._apply.assert_awaited_once_with(destination, {milk_key: milk, bread_key: bread}, milk_key, None)
+    syncer._apply.assert_awaited_once_with(
+        destination, {milk_key: milk, bread_key: bread}, milk_key, None
+    )
     assert syncer._snapshot == {bread_key: bread}
 
 @pytest.mark.asyncio
@@ -627,7 +629,9 @@ def test_empty_list_suspect_clearing_resets_confirmation(syncer):
 async def test_sync_holds_back_when_list_is_empty(syncer):
     old = item("Milk")
     syncer._snapshot = {_identity("Milk", ""): old}
-    syncer._fetch = AsyncMock(side_effect=[[], [{"summary": "Milk", "status": "needs_action"}]])
+    syncer._fetch = AsyncMock(
+        side_effect=[[], [{"summary": "Milk", "status": "needs_action"}]]
+    )
     syncer._supports_description = lambda _entity_id: True
     syncer._apply = AsyncMock()
     scheduled = []
