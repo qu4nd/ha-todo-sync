@@ -44,53 +44,6 @@ MASS_DELETE_MIN = 5
 CONFIRM_SECONDS = 360  # longer than the slowest source poll (Alexa: 300 s)
 DONE = "completed"
 OPEN = "needs_action"
-"Bidirectional sync between two Home Assistant to-do lists (title + status).
-
-The integration is intentionally centered around TodoSyncer: it reads both lists,
-compares them with the last successfully synchronized snapshot, applies the
-resulting changes, and persists the new snapshot. Keeping that flow in one place
-makes conflict handling and retries consistent for every supported to-do provider.
-"""
-
-from __future__ import annotations
-
-import asyncio
-import json
-import logging
-import re
-import time
-from datetime import datetime, timedelta, timezone
-
-from homeassistant.components.todo import TodoListEntityFeature
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
-from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
-from homeassistant.helpers.event import (
-    async_call_later,
-    async_track_state_change_event,
-    async_track_time_interval,
-)
-from homeassistant.helpers.storage import Store
-
-from .const import (
-    CONF_INTERVAL,
-    CONF_LIST_A,
-    CONF_LIST_B,
-    DEBOUNCE_SECONDS,
-    DOMAIN,
-    SCAN_INTERVAL_MINUTES,
-    STORAGE_VERSION,
-)
-
-_LOGGER = logging.getLogger(__name__)
-
-PLATFORMS = ["button", "sensor"]
-RETRY_SECONDS = 30
-MAX_RETRY_SECONDS = 300
-MASS_DELETE_MIN = 5
-CONFIRM_SECONDS = 360  # longer than the slowest source poll (Alexa: 300 s)
-DONE = "completed"
-OPEN = "needs_action"
 def _key(summary: str) -> str:
     return summary.strip().casefold()
 
