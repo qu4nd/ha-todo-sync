@@ -36,12 +36,43 @@ def item(name, status="needs_action", description=""):
     }
 
 
-def test_split_title_extracts_quantity_and_unit(syncer):
-    assert syncer._split_title("Milch 0,5 l", {}) == ("Milch", "0,5 l")
-    assert syncer._split_title("Eier 10", {}) == ("Eier", "10")
+def test_split_title_uses_first_word_as_identity(syncer):
+    assert syncer._split_title("Milch 0,5 l") == ("Milch", "0,5 l")
+    assert syncer._split_title("Eier 10") == ("Eier", "10")
+    assert syncer._split_title("gelbe Tomaten") == ("gelbe", "Tomaten")
+    assert syncer._split_title("rote Zwiebeln") == ("rote", "Zwiebeln")
+    assert syncer._split_title("Buttermilch") == ("Buttermilch", "")
 
 
-def test_split_title_prefers_exact_known_title(syncer):
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        ("Pizza 4 Käse", ("Pizza", "4 Käse")),
+        ("Pizza 4 Stagioni", ("Pizza", "4 Stagioni")),
+        ("Formel 1", ("Formel", "1")),
+        ("Windows 11 Pro", ("Windows", "11 Pro")),
+        ("gelbe Tomaten", ("gelbe", "Tomaten")),
+        ("rote Zwiebeln", ("rote", "Zwiebeln")),
+    ],
+)
+def test_split_title_uses_first_word_for_numbered_and_text_details(syncer, title, expected):
+    assert syncer._split_title(title, {}) == expected
+
+
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        ("Milch 3", ("Milch", "3")),
+        ("Käse 200 g", ("Käse", "200 g")),
+        ("Milch 0,5l", ("Milch", "0,5l")),
+        ("Wasser 1,5 l", ("Wasser", "1,5 l")),
+    ],
+)
+def test_split_title_extracts_numeric_quantities(syncer, title, expected):
+    assert syncer._split_title(title, {}) == expected
+
+
+def test_split_title_is_independent_of_known_title_hints(syncer):
     known = {"milch 3": ("Milch", "3")}
     assert syncer._split_title("Milch 3", known) == ("Milch", "3")
 
@@ -86,10 +117,14 @@ def test_parse_keeps_same_name_with_different_descriptions(syncer):
 
 
 @pytest.mark.parametrize(
-    "title", ["gelbe Tomaten", "Pizza mit viel Liebe", "Buttermilch"]
+    ("title", "expected"),
+    [
+        ("Pizza mit viel Liebe", ("Pizza", "mit viel Liebe")),
+        ("Buttermilch", ("Buttermilch", "")),
+    ],
 )
-def test_split_title_keeps_plain_names_intact(syncer, title):
-    assert syncer._split_title(title, {}) == (title, "")
+def test_split_title_handles_text_details(syncer, title, expected):
+    assert syncer._split_title(title, {}) == expected
 
 
 def test_parse_alexa_titles_uses_known_name_details_pairs(syncer):
@@ -114,11 +149,67 @@ def test_parse_alexa_titles_uses_known_name_details_pairs(syncer):
     }
 
 
+def test_migrate_preserves_name_and_numeric_detail_pair(syncer):
+    old = {
+        "pizza": {
+            "title": "Pizza 4 Käse",
+            "name": "Pizza",
+            "status": "needs_action",
+            "description": "4 Käse",
+        }
+    }
+
+    assert syncer._migrate_snapshot(old) == {
+        _identity("Pizza", "4 Käse"): old["pizza"]
+    }
+
+
 def test_migrate_name_keyed_snapshot(syncer):
     old = {"pizza": item("Pizza", description="4 Käse")}
 
     assert syncer._migrate_snapshot(old) == {
         _identity("Pizza", "4 Käse"): item("Pizza", description="4 Käse")
+    }
+
+
+def test_parse_title_only_provider_splits_pizza_details(syncer):
+    syncer._supports_description = lambda _entity_id: False
+
+    parsed = syncer._parse(
+        "todo.a",
+        [
+            {"summary": "Pizza 4 Käse", "status": "needs_action", "uid": "pizza-cheese"},
+            {"summary": "Pizza 4 Stagioni", "status": "needs_action", "uid": "pizza-stagioni"},
+        ],
+        {},
+    )
+
+    assert set(parsed) == {
+        _identity("Pizza", "4 Käse"),
+        _identity("Pizza", "4 Stagioni"),
+    }
+
+
+@pytest.mark.asyncio
+async def test_sync_keeps_numbered_names_distinct_across_provider_types(syncer):
+    syncer._fetch = AsyncMock(
+        side_effect=[
+            [
+                {"summary": "Pizza 4 Käse", "status": "needs_action", "uid": "a1"},
+                {"summary": "Pizza 4 Stagioni", "status": "needs_action", "uid": "a2"},
+            ],
+            [],
+        ]
+    )
+    syncer._supports_description = lambda entity_id: entity_id == "todo.b"
+    syncer._apply = AsyncMock()
+
+    await syncer._sync("todo.a")
+
+    assert syncer._apply.await_count == 2
+    assert set(syncer._snapshot) == {
+        _identity("Pizza", "4 Käse"),
+        _identity("Pizza", "4 Stagioni"),
     }
 
 
