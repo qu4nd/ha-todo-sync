@@ -135,6 +135,53 @@ async def test_delete_uses_uid_for_duplicate_summary(syncer):
 
 
 @pytest.mark.asyncio
+async def test_update_uses_uid_for_duplicate_summary(syncer):
+    syncer._supports_description = lambda _entity_id: True
+    syncer._call = AsyncMock()
+    current = {
+        _identity("Pizza", "4 Käse"): {
+            **item("Pizza", description="4 Käse"),
+            "uid": "bring-1",
+        },
+        _identity("Pizza", "4 Stagioni"): {
+            **item("Pizza", description="4 Stagioni"),
+            "uid": "bring-2",
+        },
+    }
+    target = item("Pizza", status="completed", description="4 Käse")
+
+    await syncer._apply("todo.a", current, _identity("Pizza", "4 Käse"), target)
+
+    syncer._call.assert_awaited_once_with(
+        "update_item",
+        {"entity_id": "todo.a", "item": "bring-1", "status": "completed"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_new_completed_item_is_updated_by_resolved_uid(syncer):
+    syncer._supports_description = lambda _entity_id: True
+    syncer._call = AsyncMock()
+    syncer._fetch = AsyncMock(
+        return_value=[
+            {"summary": "Pizza", "description": "4 Käse", "status": "needs_action", "uid": "new-pizza"}
+        ]
+    )
+    target = item("Pizza", status="completed", description="4 Käse")
+
+    await syncer._apply("todo.a", {}, _identity("Pizza", "4 Käse"), target)
+
+    assert syncer._call.await_args_list[0].args == (
+        "add_item",
+        {"entity_id": "todo.a", "item": "Pizza", "description": "4 Käse"},
+    )
+    assert syncer._call.await_args_list[1].args == (
+        "update_item",
+        {"entity_id": "todo.a", "item": "new-pizza", "status": "completed"},
+    )
+
+
+@pytest.mark.asyncio
 async def test_new_item_on_a_is_applied_to_b(syncer):
     source = item("Milch", description="3")
     syncer._fetch = AsyncMock(
