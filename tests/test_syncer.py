@@ -110,7 +110,7 @@ def test_split_title_uses_first_word_as_identity(syncer):
     ],
 )
 def test_split_title_uses_first_word_for_numbered_and_text_details(syncer, title, expected):
-    assert syncer._split_title(title, {}) == expected
+    assert syncer._split_title(title) == expected
 
 
 @pytest.mark.parametrize(
@@ -126,18 +126,12 @@ def test_split_title_extracts_numeric_quantities(syncer, title, expected):
     assert syncer._split_title(title, {}) == expected
 
 
-def test_split_title_is_independent_of_known_title_hints(syncer):
-    known = {"milch 3": ("Milch", "3")}
-    assert syncer._split_title("Milch 3", known) == ("Milch", "3")
-
-
 def test_parse_preserves_description_when_supported(syncer, hass):
     syncer._supports_description = lambda _entity_id: True
 
     parsed = syncer._parse(
         "todo.a",
         [{"summary": "Milch", "status": "needs_action", "description": "3"}],
-        {},
     )
 
     assert parsed == {
@@ -181,12 +175,8 @@ def test_split_title_handles_text_details(syncer, title, expected):
     assert syncer._split_title(title, {}) == expected
 
 
-def test_parse_alexa_titles_uses_known_name_details_pairs(syncer):
+def test_parse_alexa_titles_splits_name_and_details(syncer):
     syncer._supports_description = lambda _entity_id: False
-    known = {
-        "pizza 4 käse": ("Pizza", "4 Käse"),
-        "pizza 4 stagioni": ("Pizza", "4 Stagioni"),
-    }
 
     parsed = syncer._parse(
         "todo.b",
@@ -194,7 +184,6 @@ def test_parse_alexa_titles_uses_known_name_details_pairs(syncer):
             {"summary": "Pizza 4 Käse", "status": "needs_action", "uid": "alexa-1"},
             {"summary": "Pizza 4 Stagioni", "status": "needs_action", "uid": "alexa-2"},
         ],
-        known,
     )
 
     assert set(parsed) == {
