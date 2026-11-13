@@ -46,16 +46,19 @@ Your existing Home Assistant provider integrations may still communicate with th
 
 ---
 
-## 🧠 How Smart Quantity Bridging Works
+## 🧠 How Item Names & Details Are Bridged
 
-Lists like **Bring!** store quantities and notes in a dedicated `description` field, whereas **Alexa** only supports a single item title. **To-do Sync** bridges this seamlessly:
+Lists like **Bring!** store the item name and its details separately, whereas **Alexa** only supports a single item title. To make both sides comparable, **To-do Sync** applies one deterministic parsing rule to titles from providers without description support:
+
+**The first word is always the item name; everything after the first space is the detail.** This rule is intentional and does not try to guess whether the remaining text is a quantity, a note, or part of a product name.
 
 | Action | Bring! (`todo.zuhause`) | ⇄ | Alexa (`todo.alexa_shopping_list`) | How it's handled |
 | :--- | :--- | :---: | :--- | :--- |
 | **Add on Bring!** | **Item:** `Milch`<br>**Desc:** `3` | ➡️ | **Title:** `Milch 3` | Appends description to the title on lists without description support. |
-| **Add on Alexa** | **Item:** `Käse`<br>**Desc:** `200 g` | ⬅️ | **Title:** `Käse 200 g` | Splits a trailing number and any following detail text (e.g. `2`, `200 g`, `0,5l`, `4 Käse`, `4 Stagioni`) into the description field. |
-| **Known Custom Text** | **Item:** `Test`<br>**Desc:** `bringdetails` | 🔄 | **Title:** `Test bringdetails` | Remembers exact known `Name Details` pairs from Bring! or the last snapshot—even without numbers. |
-| **Same Name, Different Details** | **Items:** `Pizza` + **Desc:** `4 Käse` and `4 Stagioni` | 🔄 | **Titles:** `Pizza 4 Käse` and `Pizza 4 Stagioni` | Uses the name + description pair as the identity, so neither entry overwrites the other. |
+| **Add on Alexa** | **Item:** `Käse`<br>**Desc:** `200 g` | ⬅️ | **Title:** `Käse 200 g` | Splits after the first word: `Käse` is the name and `200 g` the detail. |
+| **Text Details** | **Item:** `gelbe`<br>**Desc:** `Tomaten` | 🔄 | **Title:** `gelbe Tomaten` | The first word remains the identity even when the detail is ordinary text rather than a quantity. |
+| **Same Name, Different Details** | **Items:** `Pizza` + **Desc:** `4 Käse` and `4 Stagioni` | 🔄 | **Titles:** `Pizza 4 Käse` and `Pizza 4 Stagioni` | Both titles become the same name (`Pizza`) with different details, so neither entry overwrites the other. |
+| **Numbers & Product Names** | **Item:** `Formel`<br>**Desc:** `1` | 🔄 | **Title:** `Formel 1` | Numbers are treated like any other detail; no special quantity or product-name detection is attempted. |
 
 ---
 
