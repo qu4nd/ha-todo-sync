@@ -454,7 +454,7 @@ class TodoSyncer:
         )
 
     def _hold_back(self, suspects: frozenset) -> bool:
-        """True while a mass deletion is not yet confirmed (same result for CONFIRM_SECONDS)."""
+        """True while an empty-list result is not yet confirmed."""
         now = time.monotonic()
         if not suspects:
             self._suspect = None
@@ -465,7 +465,8 @@ class TodoSyncer:
         if waited >= CONFIRM_SECONDS:
             return False
         _LOGGER.warning(
-            "A list that still has open snapshot items appears empty; holding back and re-checking "
+            "A list that still has open snapshot items appears empty; "
+            "holding back and re-checking "
             "in %d s (accepted if the result stays the same)",
             CONFIRM_SECONDS - waited,
         )
@@ -539,9 +540,9 @@ class TodoSyncer:
         items_a = self._parse(self.a, raw[self.a], {})
         items_b = self._parse(self.b, raw[self.b], {})
         self._resolve_pending_writes(items_a, items_b)
-        # A sudden disappearance of most open items can be a transient provider/API
-        # read failure. Do not propagate those deletions until the same result is seen
-        # again after the confirmation window.
+        # A completely empty list can be a transient provider/API read failure.
+        # Do not propagate its deletions until the same result is seen again after
+        # the confirmation window.
         if self._hold_back(self._empty_list_suspects(items_a, items_b)):
             self._sync_deferred = True
             self._schedule(trigger, CONFIRM_SECONDS + 10)
