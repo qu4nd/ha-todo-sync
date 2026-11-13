@@ -53,9 +53,9 @@ Lists like **Bring!** store quantities and notes in a dedicated `description` fi
 | Action | Bring! (`todo.zuhause`) | ⇄ | Alexa (`todo.alexa_shopping_list`) | How it's handled |
 | :--- | :--- | :---: | :--- | :--- |
 | **Add on Bring!** | **Item:** `Milch`<br>**Desc:** `3` | ➡️ | **Title:** `Milch 3` | Appends description to the title on lists without description support. |
-| **Add on Alexa** | **Item:** `Käse`<br>**Desc:** `200 g` | ⬅️ | **Title:** `Käse 200 g` | Splits trailing numbers and recognized units (`2`, `200 g`, `0,5l`) into the description field. Words after a number are preserved as part of the item name (e.g. `Pizza 4 Käse`). |
+| **Add on Alexa** | **Item:** `Käse`<br>**Desc:** `200 g` | ⬅️ | **Title:** `Käse 200 g` | Splits a trailing number and any following detail text (e.g. `2`, `200 g`, `0,5l`, `4 Käse`, `4 Stagioni`) into the description field. |
 | **Known Custom Text** | **Item:** `Test`<br>**Desc:** `bringdetails` | 🔄 | **Title:** `Test bringdetails` | Remembers exact known `Name Details` pairs from Bring! or the last snapshot—even without numbers. |
-| **Same Name, Different Details** | **Item:** `Pizza`<br>**Desc:** `4 Käse` and `4 Stagioni` | 🔄 | **Titles:** `Pizza 4 Käse` and `Pizza 4 Stagioni` | Uses the name + description pair as the identity, so neither entry overwrites the other. |
+| **Same Name, Different Details** | **Items:** `Pizza` + **Desc:** `4 Käse` and `4 Stagioni` | 🔄 | **Titles:** `Pizza 4 Käse` and `Pizza 4 Stagioni` | Uses the name + description pair as the identity, so neither entry overwrites the other. |
 
 ---
 
