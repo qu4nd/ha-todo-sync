@@ -25,6 +25,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  detect-hacs-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.filter.outputs.run }}
+    steps:
+      - name: Decide whether HACS validation is needed
+        id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # Always validate pushes to main, scheduled runs, and manual runs.
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # HACS checks repository/integration metadata, not Python implementation
+          # or tests. Keep this list aligned with the files that affect those checks.
+          files="$(gh api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename')"
+          run_hacs=false
+          while IFS= read -r file; do
+            case "$file" in
+              README*|hacs.json|custom_components/todo_sync/manifest.json|custom_components/todo_sync/brand/*)
+                run_hacs=true
+                break
+                ;;
+            esac
+          done <<< "$files"
+
+          echo "run=$run_hacs" >> "$GITHUB_OUTPUT"
+          echo "HACS validation required: $run_hacs"
+
   hassfest:
     runs-on: ubuntu-latest
     steps:
@@ -35,6 +72,8 @@ jobs:
       - uses: home-assistant/actions/hassfest@86d4564712fa02543c808e3a693dd04f9d3f8361 # master
 
   hacs:
+    needs: detect-hacs-changes
+    if: needs.detect-hacs-changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -126,7 +165,7 @@ jobs:
           author_type="$(jq -r '.user.type' <<< "$pr")"
           base_branch="$(jq -r '.base.ref' <<< "$pr")"
           head_branch="$(jq -r '.head.ref' <<< "$pr")"
-          head_repo="$(jq -r '.head.repo.full_name // ""' <<< "$pr")"
+          head_repo="$(jq -r '.head.repo.full_name // "" <<< "$pr")"
           pr_head_sha="$(jq -r '.head.sha' <<< "$pr")"
           is_draft="$(jq -r '.draft' <<< "$pr")"
           merged="$(jq -r '.merged' <<< "$pr")"
