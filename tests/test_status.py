@@ -1,6 +1,6 @@
 """Tests for persisted synchronization status and diagnostics."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -17,7 +17,7 @@ def syncer(hass):
     )
     instance = TodoSyncer(hass, entry)
     instance._store.async_save = AsyncMock()
-    instance._store.async_delay_save = AsyncMock()
+    instance._store.async_delay_save = Mock()
     return instance
 
 
