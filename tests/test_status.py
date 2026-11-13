@@ -1,5 +1,6 @@
 """Tests for persisted synchronization status and diagnostics."""
 
+import logging
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -234,3 +235,19 @@ async def test_apply_counts_create_update_and_delete_only(syncer):
     assert await syncer._apply("todo.b", {"milk": target}, "milk", target) is False
     assert await syncer._apply("todo.b", {"milk": target}, "milk", None) is True
     assert syncer._call.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_error_logs_do_not_expose_exception_messages_or_entity_ids(syncer, caplog):
+    syncer._ready = lambda: True
+    syncer._sync = AsyncMock(side_effect=RuntimeError("private shopping item: secret product"))
+    syncer._schedule = lambda _trigger, _delay: None
+
+    with caplog.at_level(logging.ERROR, logger="custom_components.todo_sync"):
+        await syncer._run(None)
+
+    assert "RuntimeError" in caplog.text
+    assert "secret product" not in caplog.text
+    assert "todo.a" not in caplog.text
+    assert "todo.b" not in caplog.text
+    assert "Traceback" not in caplog.text

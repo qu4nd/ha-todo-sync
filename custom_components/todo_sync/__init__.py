@@ -251,7 +251,7 @@ class TodoSyncer:
             try:
                 write_failed = await self._sync(trigger)
             except _TodoListReadError:
-                _LOGGER.exception("Could not read a to-do list")
+                _LOGGER.error("Could not read a to-do list (TodoListReadError)")
                 await self._set_status(
                     "error",
                     last_error=self._now(),
@@ -260,7 +260,7 @@ class TodoSyncer:
                 )
                 self._schedule_retry(trigger, "Could not read a to-do list")
             except Exception as err:  # noqa: BLE001
-                _LOGGER.exception("Sync of %s and %s failed", self.a, self.b)
+                _LOGGER.error("Synchronization failed (%s)", type(err).__name__)
                 await self._set_status(
                     "error",
                     last_error=self._now(),
@@ -550,9 +550,12 @@ class TodoSyncer:
             self._schedule(trigger, CONFIRM_SECONDS + 10)
             return False
         snap = self._snapshot
+        trigger_side = (
+            "A" if trigger == self.a else "B" if trigger == self.b else "periodic"
+        )
         _LOGGER.debug(
-            "Sync (trigger=%s): %s has %d items, %s has %d items, snapshot %d",
-            trigger, self.a, len(items_a), self.b, len(items_b), len(snap),
+            "Sync started (trigger=%s): list A=%d items, list B=%d items, snapshot=%d",
+            trigger_side, len(items_a), len(items_b), len(snap),
         )
         new_snap: dict[str, dict] = {}
         write_failed = False
@@ -583,7 +586,7 @@ class TodoSyncer:
             dest = dest_items.get(key)
             _LOGGER.debug(
                 "List item change detected; action=%s destination=%s",
-                "copy" if source else "delete", dest_id,
+                "copy" if source else "delete", "A" if dest_id == self.a else "B",
             )
             # Completed entries are provider history, not active list content. Avoid
             # recreating or deleting them on the opposite side when one side omits them.
@@ -598,11 +601,15 @@ class TodoSyncer:
                 if changed:
                     self._last_synced_items += 1
                     self._track_pending_write(dest_id, key, previous_destination, source)
-            except Exception:  # noqa: BLE001
+            except Exception as err:  # noqa: BLE001
                 # Keep the old baseline for this item so the next run retries it. Other
                 # items can still sync; _run schedules a bounded retry after this pass.
                 write_failed = True
-                _LOGGER.exception("Applying a list item to %s failed, will retry", dest_id)
+                destination_side = "A" if dest_id == self.a else "B"
+                _LOGGER.error(
+                    "Applying a list item to destination %s failed (%s); will retry",
+                    destination_side, type(err).__name__,
+                )
                 if s:
                     new_snap[key] = s
                 continue
