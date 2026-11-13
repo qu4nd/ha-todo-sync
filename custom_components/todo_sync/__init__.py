@@ -45,7 +45,10 @@ MASS_DELETE_MIN = 5
 CONFIRM_SECONDS = 360  # longer than the slowest source poll (Alexa: 300 s)
 DONE = "completed"
 OPEN = "needs_action"
-_QTY_RE = re.compile(r"^(.+?)\s+(\d+(?:[.,]\d+)?(?:\s*[^\W\d_]+\.?)?)$")
+_QTY_RE = re.compile(
+    r"^(.+?)\s+(\d+(?:[.,]\d+)?(?:\s*(?:kg|g|mg|l|ml|cl|dl|stk\.?|stück))?)$",
+    re.IGNORECASE,
+)
 
 
 def _key(summary: str) -> str:
