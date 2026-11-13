@@ -34,6 +34,7 @@ The GitHub Actions validation workflow installs the test and lint dependencies w
 - `custom_components/todo_sync/button.py`: the per-configuration **Sync now** button.
 - `custom_components/todo_sync/sensor.py`: the per-configuration diagnostic synchronization-status sensor.
 - `custom_components/todo_sync/const.py`: integration domain, configuration keys and shared constants.
+- `custom_components/todo_sync/manifest.json`: Home Assistant and HACS integration metadata.
 - `custom_components/todo_sync/translations/`: English and German UI strings.
 - `tests/`: automated tests for synchronization behavior.
 
