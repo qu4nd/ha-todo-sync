@@ -98,8 +98,9 @@ To-do Sync creates a diagnostic sensor for each configured list pair. The sensor
 
 | State | Meaning |
 | :--- | :--- |
-| `idle` | No synchronization is currently running (for example, while a mass deletion is being verified). |
+| `idle` | No synchronization is currently running and no safety hold is active. |
 | `syncing` | A synchronization run is in progress. |
+| `held_back` | A suspected mass deletion is being verified; no list changes are applied during this hold. |
 | `success` | The latest run completed successfully. |
 | `error` | The latest run encountered a read or write error. |
 
@@ -110,7 +111,7 @@ The sensor also exposes these attributes:
 - `synced_items`: Number of items successfully created, updated, or removed in the latest run.
 - `last_error_type`: Technical error category (for example, `WriteError` or `TodoListReadError`).
 
-Status history is stored locally and restored after a Home Assistant restart. A run that was interrupted by a restart is restored as `idle`, not as actively syncing. The sensor does not expose list entity IDs, item names, descriptions, or task contents.
+Status history is stored locally and restored after a Home Assistant restart. A run that was interrupted by a restart is restored as `idle`, not as actively syncing. An active `held_back` state is restored; because the confirmation timer is in memory, the verification window starts again when the lists are checked after restart. A held-back run does not update `last_success`. The sensor does not expose list entity IDs, item names, descriptions, or task contents.
 
 ---
 
