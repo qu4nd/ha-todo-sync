@@ -61,7 +61,6 @@ def test_parse_preserves_description_when_supported(syncer, hass):
             "name": "Milch",
             "status": "needs_action",
             "description": "3",
-            "uid": None,
         }
     }
 
