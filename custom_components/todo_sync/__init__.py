@@ -292,13 +292,15 @@ class TodoSyncer:
             if not supports:
                 name, desc = self._split_title(title, known)
             if name:
-                items[_identity(name, desc)] = {
+                parsed_item = {
                     "title": title,
                     "name": name,
                     "status": item["status"],
                     "description": desc,
-                    "uid": item.get("uid"),
                 }
+                if item.get("uid"):
+                    parsed_item["uid"] = item["uid"]
+                items[_identity(name, desc)] = parsed_item
         return items
 
     @staticmethod
