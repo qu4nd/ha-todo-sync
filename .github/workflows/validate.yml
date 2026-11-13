@@ -165,7 +165,7 @@ jobs:
           author_type="$(jq -r '.user.type' <<< "$pr")"
           base_branch="$(jq -r '.base.ref' <<< "$pr")"
           head_branch="$(jq -r '.head.ref' <<< "$pr")"
-          head_repo="$(jq -r '.head.repo.full_name // \"\"" <<< "$pr")"
+          head_repo="$(jq -r '.head.repo.full_name // """ <<< "$pr")"
           pr_head_sha="$(jq -r '.head.sha' <<< "$pr")"
           is_draft="$(jq -r '.draft' <<< "$pr")"
           merged="$(jq -r '.merged' <<< "$pr")"
@@ -173,7 +173,7 @@ jobs:
           if [[ "$author_type" != "Bot" ||
                 "$base_branch" != "main" ||
                 "$head_repo" != "$REPOSITORY" ||
-                ! "$head_branch" =~ ^automation/release-v[0-9]+\\.[0-9]+\\.[0-9]+$ ||
+                ! "$head_branch" =~ ^automation/release-v[0-9]+\.[0-9]+\.[0-9]+$ ||
                 "$pr_head_sha" != "$HEAD_SHA" ||
                 "$is_draft" == "true" ||
                 "$merged" == "true" ]]; then
@@ -185,17 +185,17 @@ jobs:
           expected_file="custom_components/todo_sync/manifest.json"
           if [[ "$files" != "$expected_file" ]]; then
             echo "Unexpected files in automated release PR:"
-            printf '%s\\n' "$files"
+            printf '%s\n' "$files"
             exit 1
           fi
 
           echo "All validation jobs passed and PR contents are restricted to the manifest version bump."
-          result="$(gh api --method PUT "repos/$REPOSITORY/pulls/$PR_NUMBER/merge" \\
-            -f merge_method=squash \\
+          result="$(gh api --method PUT "repos/$REPOSITORY/pulls/$PR_NUMBER/merge" \
+            -f merge_method=squash \
             -f sha="$HEAD_SHA")"
           if [[ "$(jq -r '.merged' <<< "$result")" != "true" ]]; then
             echo "GitHub did not confirm that PR #$PR_NUMBER was merged."
-            printf '%s\\n' "$result"
+            printf '%s\n' "$result"
             exit 1
           fi
 
