@@ -384,6 +384,24 @@ async def test_new_item_on_a_is_applied_to_b(syncer):
     })
 
 
+def test_last_list_change_event_wins_debounce_window(syncer):
+    scheduled = []
+
+    def fake_async_call_later(_hass, delay, callback):
+        handle = Mock()
+        scheduled.append((delay, callback, handle))
+        return handle
+
+    with patch("custom_components.todo_sync.async_call_later", side_effect=fake_async_call_later):
+        syncer._schedule("todo.a", 3)
+        first_handle = syncer._debounce
+        syncer._schedule("todo.b", 3)
+
+    assert first_handle.called
+    assert syncer._pending_trigger == "todo.b"
+    assert [delay for delay, _, _ in scheduled] == [3, 3]
+
+
 @pytest.mark.asyncio
 async def test_periodic_conflict_defaults_to_list_a(syncer):
     old = item("Milch", description="3")
