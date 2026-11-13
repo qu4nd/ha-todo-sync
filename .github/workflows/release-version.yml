@@ -84,10 +84,9 @@ jobs:
           - Bump `custom_components/todo_sync/manifest.json` to **${VERSION}**
           - No functional code changes
 
-          After merging this PR, create the GitHub release with the matching tag:
-          `v${VERSION}`
-
-          The normal pull-request checks run automatically.
+          Once all required validation checks pass, this PR is merged automatically.
+          The Publish release workflow then creates the matching tag, GitHub release,
+          release notes, and integration ZIP.
           EOF
           )"
 
