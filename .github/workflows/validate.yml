@@ -2,13 +2,26 @@ name: Validate
 
 on:
   push:
-  pull_request:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
   workflow_dispatch:
   schedule:
     - cron: "0 4 * * 1"
 
+# pull_request_target loads this workflow from the base branch. The validation
+# jobs check out the PR head without credentials and receive no secrets.
+# The privileged merge job never checks out or executes PR code.
 permissions:
   contents: read
+  pull-requests: read
+  checks: read
+
+concurrency:
+  group: validate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   hassfest:
@@ -16,6 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: home-assistant/actions/hassfest@86d4564712fa02543c808e3a693dd04f9d3f8361 # master
 
@@ -24,6 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa # main
         with:
@@ -34,6 +49,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
@@ -46,3 +62,101 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: pytest -q
+
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Validate manifest version
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(
+              Path("custom_components/todo_sync/manifest.json").read_text(encoding="utf-8")
+          )
+          version = manifest.get("version")
+          if not isinstance(version, str) or not version.strip():
+              raise SystemExit("manifest.json must contain a non-empty string version")
+
+          print(f"Manifest version: {version}")
+          PY
+
+  auto-merge-release:
+    needs:
+      - hassfest
+      - hacs
+      - tests
+      - check-version
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      github.event.pull_request.user.login == 'github-actions[bot]' &&
+      startsWith(github.event.pull_request.head.ref, 'automation/release-v') &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      # This job intentionally does not check out the PR branch or execute its code.
+      - name: Create GitHub App installation token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: qu4nd
+          repositories: ha-todo-sync
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Verify release PR and merge it
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          pr="$(gh api "repos/$REPOSITORY/pulls/$PR_NUMBER")"
+          author="$(jq -r '.user.login' <<< "$pr")"
+          base_branch="$(jq -r '.base.ref' <<< "$pr")"
+          head_branch="$(jq -r '.head.ref' <<< "$pr")"
+          head_repo="$(jq -r '.head.repo.full_name // \"\"" <<< "$pr")"
+          pr_head_sha="$(jq -r '.head.sha' <<< "$pr")"
+          is_draft="$(jq -r '.draft' <<< "$pr")"
+          merged="$(jq -r '.merged' <<< "$pr")"
+
+          if [[ "$author" != "github-actions[bot]" ||
+                "$base_branch" != "main" ||
+                "$head_repo" != "$REPOSITORY" ||
+                ! "$head_branch" =~ ^automation/release-v[0-9]+\.[0-9]+\.[0-9]+$ ||
+                "$pr_head_sha" != "$HEAD_SHA" ||
+                "$is_draft" == "true" ||
+                "$merged" == "true" ]]; then
+            echo "Release PR metadata did not pass validation; refusing to merge."
+            exit 1
+          fi
+
+          files="$(gh api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename')"
+          expected_file="custom_components/todo_sync/manifest.json"
+          if [[ "$files" != "$expected_file" ]]; then
+            echo "Unexpected files in automated release PR:"
+            printf '%s\n' "$files"
+            exit 1
+          fi
+
+          echo "All validation jobs passed and PR contents are restricted to the manifest version bump."
+          result="$(gh api --method PUT "repos/$REPOSITORY/pulls/$PR_NUMBER/merge" \
+            -f merge_method=squash \
+            -f sha="$HEAD_SHA")"
+          if [[ "$(jq -r '.merged' <<< "$result")" != "true" ]]; then
+            echo "GitHub did not confirm that PR #$PR_NUMBER was merged."
+            printf '%s\n' "$result"
+            exit 1
+          fi
+
+          echo "Release PR #$PR_NUMBER merged successfully."
