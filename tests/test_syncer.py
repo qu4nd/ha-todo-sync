@@ -1,6 +1,6 @@
 """Unit tests for the bidirectional synchronization logic."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntry
