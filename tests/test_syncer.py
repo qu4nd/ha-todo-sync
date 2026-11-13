@@ -464,6 +464,7 @@ async def test_failed_apply_keeps_previous_snapshot_for_retry(syncer):
     syncer._apply.assert_awaited_once()
     assert write_failed is True
     assert syncer._snapshot == {_identity("Milch", "3"): old}
+    assert syncer._pending_writes == {}
 
 
 @pytest.mark.asyncio
