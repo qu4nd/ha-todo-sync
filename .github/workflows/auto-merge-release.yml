@@ -1,0 +1,97 @@
+name: Auto-merge release PR
+
+on:
+  workflow_run:
+    workflows:
+      - Validate
+    types:
+      - completed
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: auto-merge-release-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  auto-merge:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'automation/release-v') &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create GitHub App installation token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: qu4nd
+          repositories: ha-todo-sync
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Verify release PR and merge it
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          prs="$(gh pr list --repo "$REPOSITORY" --state open --head "$HEAD_BRANCH" \
+            --json number,author,baseRefName,headRefName,headRefOid,isDraft)"
+
+          count="$(jq 'length' <<< "$prs")"
+          if [[ "$count" -eq 0 ]]; then
+            echo "No open release PR found for $HEAD_BRANCH; this can happen for the branch-push validation run."
+            exit 0
+          fi
+          if [[ "$count" -ne 1 ]]; then
+            echo "Expected exactly one open PR for $HEAD_BRANCH, found $count."
+            exit 1
+          fi
+
+          pr_number="$(jq -r '.[0].number' <<< "$prs")"
+          author="$(jq -r '.[0].author.login' <<< "$prs")"
+          base_branch="$(jq -r '.[0].baseRefName' <<< "$prs")"
+          head_branch="$(jq -r '.[0].headRefName' <<< "$prs")"
+          pr_head_sha="$(jq -r '.[0].headRefOid' <<< "$prs")"
+          is_draft="$(jq -r '.[0].isDraft' <<< "$prs")"
+
+          if [[ "$author" != "github-actions[bot]" ||
+                "$base_branch" != "main" ||
+                "$head_branch" != "$HEAD_BRANCH" ||
+                ! "$head_branch" =~ ^automation/release-v[0-9]+\.[0-9]+\.[0-9]+$ ||
+                "$pr_head_sha" != "$HEAD_SHA" ||
+                "$is_draft" == "true" ]]; then
+            echo "Release PR metadata did not pass validation; refusing to merge."
+            printf 'author=%s base=%s head=%s sha=%s draft=%s\n' \
+              "$author" "$base_branch" "$head_branch" "$pr_head_sha" "$is_draft"
+            exit 1
+          fi
+
+          files="$(gh api --paginate "repos/$REPOSITORY/pulls/$pr_number/files" --jq '.[].filename')"
+          expected="custom_components/todo_sync/manifest.json"
+          if [[ "$files" != "$expected" ]]; then
+            echo "Unexpected files in automated release PR:"
+            printf '%s\n' "$files"
+            exit 1
+          fi
+
+          echo "All Validate jobs passed for $HEAD_SHA and the PR contains only the manifest version bump."
+          echo "Merging release PR #$pr_number."
+          result="$(gh api --method PUT "repos/$REPOSITORY/pulls/$pr_number/merge" \
+            -f merge_method=squash \
+            -f sha="$HEAD_SHA")"
+          if [[ "$(jq -r '.merged' <<< "$result")" != "true" ]]; then
+            echo "GitHub did not confirm that PR #$pr_number was merged."
+            printf '%s\n' "$result"
+            exit 1
+          fi
+
+          echo "Release PR #$pr_number merged successfully."
