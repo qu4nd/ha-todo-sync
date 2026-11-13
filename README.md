@@ -156,7 +156,7 @@ Snapshots are written only when their persisted data changes. Transient `syncing
 
 ## 🔍 Troubleshooting & Debug Logging
 
-At startup, the integration automatically waits until both `todo` entities are available. To inspect the item-by-item sync decisions, enable debug logging:
+At startup, the integration automatically waits until both `todo` entities are available. Debug logging provides privacy-safe operational context, including list item counts, snapshot size, whether a run was event-triggered or periodic, the operation type (copy or delete), destination side (A or B), skipped completed-item history, and retry timing. Error logs include a generic operation description and exception class, but deliberately omit exception tracebacks and exception messages because providers may include item titles or service data in them. List entity IDs, item names, descriptions, and task contents are not written by this integration. To inspect this diagnostic information, enable debug logging:
 
 **Option A: Temporary via UI**  
 Go to **Developer tools** → **Actions** → call `logger.set_level`:
@@ -175,7 +175,7 @@ logger:
     custom_components.todo_sync: debug
 ```
 
-Check **Settings** → **System** → **Logs** and filter for `todo_sync`.
+Check **Settings** → **System** → **Logs** and filter for `todo_sync`. Debug output is intended to explain synchronization flow and aggregate outcomes, not to expose individual list entries.
 
 ---
 
