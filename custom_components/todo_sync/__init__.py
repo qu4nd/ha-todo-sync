@@ -355,15 +355,12 @@ class TodoSyncer:
         return items
 
     @staticmethod
-    def _split_title(title: str, known: dict[str, tuple[str, str]]) -> tuple[str, str]:
-        """Split a title at its trailing numeric detail; prefer an exact known name/details pair."""
-        # Prefer an exact pair learned from the other list or the previous snapshot.
-        # Only fall back to the quantity pattern for titles we have never seen before.
-        if (hit := known.get(title.casefold())) is not None:
-            return hit
-        if m := _QTY_RE.match(title):
-            return m.group(1).strip(), m.group(2).strip()
-        return title, ""
+    def _split_title(title: str, known: dict[str, tuple[str, str]] | None = None) -> tuple[str, str]:
+        """Use the first word as the item name and everything after it as details."""
+        parts = title.strip().split(maxsplit=1)
+        if not parts:
+            return "", ""
+        return parts[0], parts[1] if len(parts) == 2 else ""
 
     def _supports_description(self, entity_id: str) -> bool:
         state = self.hass.states.get(entity_id)
