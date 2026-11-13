@@ -143,6 +143,47 @@ def test_migrate_name_keyed_snapshot(syncer):
 
 
 @pytest.mark.asyncio
+def test_parse_title_only_provider_preserves_pizza_names(syncer):
+    syncer._supports_description = lambda _entity_id: False
+
+    parsed = syncer._parse(
+        "todo.a",
+        [
+            {"summary": "Pizza 4 Käse", "status": "needs_action", "uid": "pizza-cheese"},
+            {"summary": "Pizza 4 Stagioni", "status": "needs_action", "uid": "pizza-stagioni"},
+        ],
+        {},
+    )
+
+    assert set(parsed) == {
+        _identity("Pizza 4 Käse", ""),
+        _identity("Pizza 4 Stagioni", ""),
+    }
+
+
+@pytest.mark.asyncio
+async def test_sync_keeps_numbered_names_distinct_across_provider_types(syncer):
+    syncer._fetch = AsyncMock(
+        side_effect=[
+            [
+                {"summary": "Pizza 4 Käse", "status": "needs_action", "uid": "a1"},
+                {"summary": "Pizza 4 Stagioni", "status": "needs_action", "uid": "a2"},
+            ],
+            [],
+        ]
+    )
+    syncer._supports_description = lambda entity_id: entity_id == "todo.b"
+    syncer._apply = AsyncMock()
+
+    await syncer._sync("todo.a")
+
+    assert syncer._apply.await_count == 2
+    assert set(syncer._snapshot) == {
+        _identity("Pizza 4 Käse", ""),
+        _identity("Pizza 4 Stagioni", ""),
+    }
+
+
 async def test_sync_preserves_two_items_with_same_name(syncer):
     syncer._fetch = AsyncMock(
         side_effect=[
