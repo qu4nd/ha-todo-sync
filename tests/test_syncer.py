@@ -86,6 +86,35 @@ def test_parse_keeps_same_name_with_different_descriptions(syncer):
     assert parsed[_identity("Pizza", "4 Stagioni")]["uid"] == "uid-2"
 
 
+@pytest.mark.parametrize(
+    "title", ["gelbe Tomaten", "Pizza mit viel Liebe", "Buttermilch"]
+)
+def test_split_title_keeps_plain_names_intact(syncer, title):
+    assert syncer._split_title(title, {}) == (title, "")
+
+
+def test_parse_alexa_titles_uses_known_name_details_pairs(syncer):
+    syncer._supports_description = lambda _entity_id: False
+    known = {
+        "pizza 4 käse": ("Pizza", "4 Käse"),
+        "pizza 4 stagioni": ("Pizza", "4 Stagioni"),
+    }
+
+    parsed = syncer._parse(
+        "todo.b",
+        [
+            {"summary": "Pizza 4 Käse", "status": "needs_action", "uid": "alexa-1"},
+            {"summary": "Pizza 4 Stagioni", "status": "needs_action", "uid": "alexa-2"},
+        ],
+        known,
+    )
+
+    assert set(parsed) == {
+        _identity("Pizza", "4 Käse"),
+        _identity("Pizza", "4 Stagioni"),
+    }
+
+
 def test_migrate_name_keyed_snapshot(syncer):
     old = {"pizza": item("Pizza", description="4 Käse")}
 
