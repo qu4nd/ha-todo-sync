@@ -110,7 +110,7 @@ def test_split_title_uses_first_word_as_identity(syncer):
     ],
 )
 def test_split_title_uses_first_word_for_numbered_and_text_details(syncer, title, expected):
-    assert syncer._split_title(title, {}) == expected
+    assert syncer._split_title(title) == expected
 
 
 @pytest.mark.parametrize(
@@ -181,7 +181,7 @@ def test_split_title_handles_text_details(syncer, title, expected):
     assert syncer._split_title(title, {}) == expected
 
 
-def test_parse_alexa_titles_uses_known_name_details_pairs(syncer):
+def test_parse_alexa_titles_splits_name_and_details(syncer):
     syncer._supports_description = lambda _entity_id: False
     known = {
         "pizza 4 käse": ("Pizza", "4 Käse"),
