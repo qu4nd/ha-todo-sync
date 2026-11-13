@@ -72,6 +72,59 @@ async def test_restart_restores_history_but_not_syncing_state(syncer, hass):
 
 
 @pytest.mark.asyncio
+async def test_restart_restores_held_back_state(syncer):
+    syncer._store.async_load = AsyncMock(
+        return_value={
+            "snapshot": {},
+            "status": {
+                "state": "held_back",
+                "last_success": "2026-11-12T12:00:00+00:00",
+                "last_error": None,
+                "synced_items": 0,
+                "last_error_type": None,
+            },
+        }
+    )
+    syncer._schedule = lambda _trigger, _delay: None
+
+    await syncer.async_start()
+
+    assert syncer.status == "held_back"
+    assert syncer.status_attributes["last_success"] == "2026-11-12T12:00:00+00:00"
+    assert syncer._suspect is None
+
+
+@pytest.mark.asyncio
+async def test_held_back_status_clears_when_mass_delete_is_confirmed(syncer):
+    syncer._ready = lambda: True
+    previous_success = "2026-11-12T12:00:00+00:00"
+    await syncer._set_status("success", last_success=previous_success)
+    syncer._store.async_delay_save.reset_mock()
+
+    deferred = True
+
+    async def sync_with_confirmation(_trigger):
+        nonlocal deferred
+        syncer._sync_deferred = deferred
+        deferred = False
+        return False
+
+    syncer._sync = AsyncMock(side_effect=sync_with_confirmation)
+    syncer._schedule = lambda _trigger, _delay: None
+
+    await syncer._run(None)
+
+    assert syncer.status == "held_back"
+    assert syncer.status_attributes["last_success"] == previous_success
+    assert syncer.status_attributes["synced_items"] == 0
+
+    await syncer._run(None)
+
+    assert syncer.status == "success"
+    assert syncer.status_attributes["last_success"] != previous_success
+
+
+@pytest.mark.asyncio
 async def test_restart_restores_pending_write_expectations(syncer):
     pending = {
         syncer._pending_key("todo.b", _identity("Milk", "")): {
@@ -114,6 +167,9 @@ async def test_stop_flushes_latest_snapshot(syncer):
 
 @pytest.mark.asyncio
 async def test_read_failure_sets_non_sensitive_error_status(syncer):
+    await syncer._set_status(
+        "held_back", last_success="2026-11-12T12:00:00+00:00"
+    )
     syncer._ready = lambda: True
     syncer._sync = AsyncMock(side_effect=_TodoListReadError("todo.private_list"))
     syncer._schedule = lambda _trigger, _delay: None
@@ -123,6 +179,7 @@ async def test_read_failure_sets_non_sensitive_error_status(syncer):
     assert syncer.status == "error"
     assert syncer.status_attributes["last_error"] is not None
     assert syncer.status_attributes["last_error_type"] == "TodoListReadError"
+    assert syncer.status_attributes["last_success"] == "2026-11-12T12:00:00+00:00"
     assert syncer.status_attributes["synced_items"] == 0
     assert "todo.private_list" not in str(syncer.status_attributes)
 

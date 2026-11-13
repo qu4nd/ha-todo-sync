@@ -278,7 +278,7 @@ class TodoSyncer:
                     self._schedule_retry(trigger, "One or more list updates failed")
                 elif self._sync_deferred:
                     self._retry_attempt = 0
-                    await self._set_status("idle", synced_items=0)
+                    await self._set_status("held_back", synced_items=0)
                 else:
                     self._retry_attempt = 0
                     await self._set_status(
