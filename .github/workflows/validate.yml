@@ -2,7 +2,7 @@ name: Validate
 
 on:
   push:
-  pull_request_target:
+  pull_request:
     types:
       - opened
       - synchronize
@@ -11,8 +11,7 @@ on:
   schedule:
     - cron: "0 4 * * 1"
 
-# pull_request_target loads this workflow from the base branch. The validation
-# jobs check out the PR head without credentials and receive no secrets.
+# The validation jobs check out the exact PR head without credentials and receive no secrets.
 # The privileged merge job never checks out or executes PR code.
 permissions:
   contents: read
@@ -94,8 +93,8 @@ jobs:
       - tests
       - check-version
     if: >-
-      github.event_name == 'pull_request_target' &&
-      github.event.pull_request.user.login == 'github-actions[bot]' &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.user.type == 'Bot' &&
       startsWith(github.event.pull_request.head.ref, 'automation/release-v') &&
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
