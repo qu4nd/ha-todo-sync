@@ -125,7 +125,7 @@ jobs:
           author="$(jq -r '.user.login' <<< "$pr")"
           base_branch="$(jq -r '.base.ref' <<< "$pr")"
           head_branch="$(jq -r '.head.ref' <<< "$pr")"
-          head_repo="$(jq -r '.head.repo.full_name // \"\"" <<< "$pr")"
+          head_repo="$(jq -r '.head.repo.full_name // ""' <<< "$pr")"
           pr_head_sha="$(jq -r '.head.sha' <<< "$pr")"
           is_draft="$(jq -r '.draft' <<< "$pr")"
           merged="$(jq -r '.merged' <<< "$pr")"
