@@ -9,6 +9,7 @@ makes conflict handling and retries consistent for every supported to-do provide
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 import time
@@ -112,7 +113,7 @@ class TodoSyncer:
         if self._status["state"] == "syncing":
             self._status["state"] = "idle"
         self._persisted_status = dict(self._status)
-        self._last_saved_data = data
+        self._last_saved_data = copy.deepcopy(data)
         await self._save_store()
         self._unsubs.append(
             async_track_state_change_event(self.hass, [self.a, self.b], self._on_change)
@@ -164,9 +165,9 @@ class TodoSyncer:
 
     def _store_data(self) -> dict:
         return {
-            "snapshot": self._snapshot,
+            "snapshot": copy.deepcopy(self._snapshot),
             "status": dict(self._persisted_status),
-            "pending_writes": self._pending_writes,
+            "pending_writes": copy.deepcopy(self._pending_writes),
         }
 
     async def _save_store(self) -> None:
@@ -175,7 +176,7 @@ class TodoSyncer:
         if data == self._last_saved_data:
             return
         await self._store.async_save(data)
-        self._last_saved_data = data
+        self._last_saved_data = copy.deepcopy(data)
 
     async def _set_status(self, state: str, *, persist: bool = True, **attributes) -> None:
         self._status.update(state=state, **attributes)
