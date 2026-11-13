@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "To-do Sync",
-        "description": "Wähle die zwei To-do-Listen, die synchron gehalten werden sollen (Titel und Status).",
+        "description": "Wähle die zwei To-do-Listen, die synchron gehalten werden sollen (Eintragsnamen, Details und Status).",
         "data": {
           "list_a": "Liste A",
           "list_b": "Liste B"

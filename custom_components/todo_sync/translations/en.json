@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "To-do Sync",
-        "description": "Choose the two to-do lists to keep in sync (title and status).",
+        "description": "Choose the two to-do lists to keep in sync (item names, details, and status).",
         "data": {
           "list_a": "List A",
           "list_b": "List B"
