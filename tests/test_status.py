@@ -37,6 +37,8 @@ async def test_status_is_persisted_and_notifies_listeners(syncer):
         "last_error": None,
         "synced_items": 2,
         "last_error_type": None,
+        "waiting_entity": None,
+        "waiting_state": None,
     }
     assert notified == [True]
     syncer._store.async_delay_save.assert_called_once()
