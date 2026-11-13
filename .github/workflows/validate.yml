@@ -13,6 +13,8 @@ on:
   schedule:
     - cron: "0 4 * * 1"
 
+# Third-party actions are pinned to SHAs of releases with a Node.js 24 runtime.
+# Re-check action.yml when updating these pins.
 # The validation jobs check out the exact PR head without credentials and receive no secrets.
 # The privileged merge job never checks out or executes PR code.
 permissions:
