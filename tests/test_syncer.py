@@ -41,6 +41,26 @@ def test_split_title_extracts_quantity_and_unit(syncer):
     assert syncer._split_title("Eier 10", {}) == ("Eier", "10")
 
 
+@pytest.mark.parametrize(
+    "title", ["Pizza 4 Käse", "Pizza 4 Stagioni", "Windows 11 Pro", "Formel 1"]
+)
+def test_split_title_preserves_numbered_names_without_known_mapping(syncer, title):
+    assert syncer._split_title(title, {}) == (title, "")
+
+
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        ("Milch 3", ("Milch", "3")),
+        ("Käse 200 g", ("Käse", "200 g")),
+        ("Milch 0,5l", ("Milch", "0,5l")),
+        ("Wasser 1,5 l", ("Wasser", "1,5 l")),
+    ],
+)
+def test_split_title_extracts_numeric_quantities(syncer, title, expected):
+    assert syncer._split_title(title, {}) == expected
+
+
 def test_split_title_prefers_exact_known_title(syncer):
     known = {"milch 3": ("Milch", "3")}
     assert syncer._split_title("Milch 3", known) == ("Milch", "3")
