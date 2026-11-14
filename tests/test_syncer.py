@@ -19,8 +19,8 @@ def syncer(hass):
         data={CONF_LIST_A: "todo.a", CONF_LIST_B: "todo.b"},
     )
     instance = TodoSyncer(hass, entry)
-    instance._store.async_save = AsyncMock()
-    instance._store.async_delay_save = Mock()
+    instance._store._store.async_save = AsyncMock()
+    instance._store._store.async_delay_save = Mock()
     return instance
 
 
@@ -84,7 +84,7 @@ async def test_unchanged_store_payload_is_not_written(syncer):
 
     await syncer._save_store()
 
-    syncer._store.async_save.assert_not_awaited()
+    syncer._store._store.async_save.assert_not_awaited()
 
 
 def test_split_title_uses_first_word_as_identity(syncer):
@@ -376,7 +376,7 @@ async def test_new_item_on_a_is_applied_to_b(syncer):
 
     syncer._apply.assert_awaited_once_with("todo.b", {}, _identity("Milch", "3"), source)
     assert syncer._snapshot == {_identity("Milch", "3"): source}
-    syncer._store.async_save.assert_awaited_once_with({
+    syncer._store._store.async_save.assert_awaited_once_with({
         "snapshot": {_identity("Milch", "3").storage_key: source},
         "status": syncer._persisted_status.to_dict(),
         "pending_writes": {
@@ -398,7 +398,7 @@ def test_last_list_change_event_wins_debounce_window(syncer):
         scheduled.append((delay, callback, handle))
         return handle
 
-    with patch("custom_components.todo_sync.async_call_later", side_effect=fake_async_call_later):
+    with patch("custom_components.todo_sync.syncer.async_call_later", side_effect=fake_async_call_later):
         syncer._schedule("todo.a", 3)
         first_handle = syncer._debounce
         syncer._schedule("todo.b", 3)
@@ -658,7 +658,7 @@ def test_empty_list_suspects_ignore_snapshots_without_open_items(syncer):
 
 def test_empty_list_hold_requires_confirmation_window(syncer):
     suspects = frozenset({"todo.a"})
-    with patch("custom_components.todo_sync.time.monotonic", side_effect=[100.0, 459.0, 460.0]):
+    with patch("custom_components.todo_sync.syncer.time.monotonic", side_effect=[100.0, 459.0, 460.0]):
         assert syncer._hold_back(suspects) is True
         assert syncer._hold_back(suspects) is True
         assert syncer._hold_back(suspects) is False
@@ -667,7 +667,7 @@ def test_empty_list_hold_requires_confirmation_window(syncer):
 def test_changed_empty_list_result_restarts_confirmation(syncer):
     first = frozenset({"todo.a"})
     second = frozenset({"todo.a", "todo.b"})
-    with patch("custom_components.todo_sync.time.monotonic", side_effect=[100.0, 200.0]):
+    with patch("custom_components.todo_sync.syncer.time.monotonic", side_effect=[100.0, 200.0]):
         assert syncer._hold_back(first) is True
         assert syncer._hold_back(second) is True
 
@@ -676,7 +676,7 @@ def test_changed_empty_list_result_restarts_confirmation(syncer):
 
 def test_empty_list_suspect_clearing_resets_confirmation(syncer):
     suspects = frozenset({"todo.a"})
-    with patch("custom_components.todo_sync.time.monotonic", side_effect=[100.0, 200.0]):
+    with patch("custom_components.todo_sync.syncer.time.monotonic", side_effect=[100.0, 200.0]):
         assert syncer._hold_back(suspects) is True
         assert syncer._hold_back(frozenset()) is False
 
@@ -753,7 +753,7 @@ async def test_failed_list_read_keeps_snapshot_and_does_not_apply_changes(
 
     assert syncer._snapshot == {_identity("Milch", ""): old}
     syncer._apply.assert_not_awaited()
-    syncer._store.async_save.assert_not_awaited()
+    syncer._store._store.async_save.assert_not_awaited()
 
 
 @pytest.mark.asyncio
