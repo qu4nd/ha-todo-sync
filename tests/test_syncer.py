@@ -675,7 +675,7 @@ def test_changed_empty_list_result_restarts_confirmation(syncer):
         assert syncer._hold_back(first) is True
         assert syncer._hold_back(second) is True
 
-    assert syncer._suspect == (second, 200.0)
+    assert syncer._empty_list_guard.suspect == (second, 200.0)
 
 
 def test_empty_list_suspect_clearing_resets_confirmation(syncer):
@@ -684,7 +684,7 @@ def test_empty_list_suspect_clearing_resets_confirmation(syncer):
         assert syncer._hold_back(suspects) is True
         assert syncer._hold_back(frozenset()) is False
 
-    assert syncer._suspect is None
+    assert syncer._empty_list_guard.suspect is None
 
 
 @pytest.mark.asyncio
