@@ -94,14 +94,26 @@ class SyncStatus:
             state = SyncState.IDLE
 
         synced_items = data.get("synced_items", 0)
+        if (
+            not isinstance(synced_items, int)
+            or isinstance(synced_items, bool)
+            or synced_items < 0
+        ):
+            synced_items = 0
+
+        def optional_string(key: str) -> str | None:
+            """Ignore malformed optional text fields in persisted status data."""
+            value = data.get(key)
+            return value if isinstance(value, str) else None
+
         return cls(
             state=state,
-            last_success=data.get("last_success"),
-            last_error=data.get("last_error"),
-            synced_items=synced_items if isinstance(synced_items, int) else 0,
-            last_error_type=data.get("last_error_type"),
-            waiting_entity=data.get("waiting_entity"),
-            waiting_state=data.get("waiting_state"),
+            last_success=optional_string("last_success"),
+            last_error=optional_string("last_error"),
+            synced_items=synced_items,
+            last_error_type=optional_string("last_error_type"),
+            waiting_entity=optional_string("waiting_entity"),
+            waiting_state=optional_string("waiting_state"),
         )
 
     def to_dict(self) -> dict:
