@@ -76,6 +76,8 @@ class TodoSyncStorage:
 
     async def async_save(self, data: dict) -> None:
         """Persist a changed payload immediately; skip unchanged data."""
+        # Keep an already scheduled callback aligned with the newest runtime state.
+        self._scheduled_data = copy.deepcopy(data)
         if data == self._last_saved_data:
             return
         await self._store.async_save(data)
@@ -83,9 +85,11 @@ class TodoSyncStorage:
 
     def async_delay_save(self, data: dict, delay: float) -> None:
         """Schedule the latest changed payload while avoiding duplicate timers."""
+        # The callback must always see the latest payload, even when it matches the
+        # last saved value and an earlier delayed save is already pending.
+        self._scheduled_data = copy.deepcopy(data)
         if data == self._last_saved_data or data == self._last_scheduled_data:
             return
-        self._scheduled_data = copy.deepcopy(data)
         self._last_scheduled_data = copy.deepcopy(data)
         self._store.async_delay_save(self._scheduled_payload, delay)
 
