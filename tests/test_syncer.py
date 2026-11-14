@@ -214,7 +214,7 @@ def test_migrate_snapshot_drops_provider_local_uid(syncer):
         }
     }
 
-    migrated = syncer._migrate_snapshot(old)
+    migrated = TodoSyncStorage.migrate_snapshot(old)
 
     assert migrated == {
         _identity("Milk", "3"): {
@@ -229,7 +229,7 @@ def test_migrate_snapshot_drops_provider_local_uid(syncer):
 def test_migrate_name_keyed_snapshot(syncer):
     old = {"pizza": item("Pizza", description="4 Käse")}
 
-    assert syncer._migrate_snapshot(old) == {
+    assert TodoSyncStorage.migrate_snapshot(old) == {
         _identity("Pizza", "4 Käse"): item("Pizza", description="4 Käse")
     }
 
