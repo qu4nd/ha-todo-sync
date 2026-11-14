@@ -132,7 +132,7 @@ async def test_restart_restores_pending_write_expectations(syncer):
     pending = {
         syncer._pending_key("todo.b", _identity("Milk", "")): {
             "entity_id": "todo.b",
-            "key": _identity("Milk", ""),
+            "key": _identity("Milk", "").storage_key,
             "before": ["needs_action", ""],
             "expected": ["completed", ""],
             "item": {
