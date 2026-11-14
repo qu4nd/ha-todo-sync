@@ -869,6 +869,48 @@ def test_sync_status_round_trips_legacy_storage_and_exposes_compatible_attribute
     }
 
 
+@pytest.mark.asyncio
+async def test_start_restores_status_and_resets_interrupted_sync(syncer):
+    stored_status = SyncStatus(
+        state=SyncState.SYNCING,
+        last_success="2026-11-14T20:00:00+00:00",
+        synced_items=2,
+    )
+    syncer._store.async_load = AsyncMock(
+        return_value={
+            "snapshot": {},
+            "pending_writes": {},
+            "status": stored_status.to_dict(),
+        }
+    )
+    syncer._schedule = Mock()
+
+    with (
+        patch(
+            "custom_components.todo_sync.async_track_state_change_event",
+            return_value=Mock(),
+        ),
+        patch(
+            "custom_components.todo_sync.async_track_time_interval",
+            return_value=Mock(),
+        ),
+    ):
+        await syncer.async_start()
+
+    assert syncer.status == "idle"
+    assert syncer.status_attributes["last_success"] == stored_status.last_success
+    syncer._store.async_save.assert_awaited_once_with(
+        {
+            "snapshot": {},
+            "pending_writes": {},
+            "status": {
+                **stored_status.to_dict(),
+                "state": "idle",
+            },
+        }
+    )
+
+
 def test_sync_status_defaults_unknown_legacy_state_to_idle():
     status = SyncStatus.from_dict({"state": "unknown_future_state", "synced_items": "bad"})
 
