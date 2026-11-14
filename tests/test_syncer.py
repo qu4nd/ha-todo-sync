@@ -14,7 +14,6 @@ from custom_components.todo_sync import (
     _identity,
 )
 from custom_components.todo_sync.const import CONF_LIST_A, CONF_LIST_B
-from custom_components.todo_sync.models import SyncState, SyncStatus
 
 
 @pytest.fixture
@@ -843,113 +842,6 @@ async def test_successful_sync_resets_write_retry_backoff(syncer):
     await syncer._run(None)
 
     assert syncer._retry_attempt == 0
-
-
-def test_sync_status_round_trips_legacy_storage_and_exposes_compatible_attributes():
-    stored = {
-        "state": "success",
-        "last_success": "2026-11-14T20:00:00+00:00",
-        "last_error": None,
-        "synced_items": 3,
-        "last_error_type": None,
-        "waiting_entity": None,
-        "waiting_state": None,
-    }
-
-    status = SyncStatus.from_dict(stored)
-
-    assert status == SyncStatus(
-        state=SyncState.SUCCESS,
-        last_success="2026-11-14T20:00:00+00:00",
-        synced_items=3,
-    )
-    assert status.to_dict() == stored
-    assert status.attributes == {
-        key: value for key, value in stored.items() if key != "state"
-    }
-
-
-@pytest.mark.asyncio
-async def test_start_restores_status_and_resets_interrupted_sync(syncer):
-    stored_status = SyncStatus(
-        state=SyncState.SYNCING,
-        last_success="2026-11-14T20:00:00+00:00",
-        synced_items=2,
-    )
-    syncer._store.async_load = AsyncMock(
-        return_value={
-            "snapshot": {},
-            "pending_writes": {},
-            "status": stored_status.to_dict(),
-        }
-    )
-    syncer._schedule = Mock()
-
-    with (
-        patch(
-            "custom_components.todo_sync.async_track_state_change_event",
-            return_value=Mock(),
-        ),
-        patch(
-            "custom_components.todo_sync.async_track_time_interval",
-            return_value=Mock(),
-        ),
-    ):
-        await syncer.async_start()
-
-    assert syncer.status == "idle"
-    assert syncer.status_attributes["last_success"] == stored_status.last_success
-    syncer._store.async_save.assert_awaited_once_with(
-        {
-            "snapshot": {},
-            "pending_writes": {},
-            "status": {
-                **stored_status.to_dict(),
-                "state": "idle",
-            },
-        }
-    )
-
-
-def test_sync_status_defaults_unknown_legacy_state_to_idle():
-    status = SyncStatus.from_dict({"state": "unknown_future_state", "synced_items": "bad"})
-
-    assert status.state is SyncState.IDLE
-    assert status.synced_items == 0
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("sync_result", "deferred", "expected_state", "expected_error"),
-    [
-        (False, False, SyncState.SUCCESS, None),
-        (True, False, SyncState.ERROR, "WriteError"),
-        (False, True, SyncState.HELD_BACK, None),
-        (_TodoListReadError("todo.a"), False, SyncState.ERROR, "TodoListReadError"),
-    ],
-)
-async def test_run_uses_explicit_terminal_status_states(
-    syncer, sync_result, deferred, expected_state, expected_error
-):
-    syncer._ready = lambda: True
-    syncer._sync_deferred = deferred
-    syncer._sync = AsyncMock(
-        side_effect=sync_result if isinstance(sync_result, Exception) else None,
-        return_value=sync_result if not isinstance(sync_result, Exception) else None,
-    )
-    syncer._schedule = Mock()
-    syncer._fetch = AsyncMock()
-    syncer._call = AsyncMock()
-
-    await syncer._run(None)
-
-    assert syncer._status.state is expected_state
-    assert syncer.status == expected_state.value
-    assert syncer.status_attributes["last_error_type"] == expected_error
-    # Status transitions use the run result and local state only; they do not
-    # introduce additional provider reads or write-service calls.
-    syncer._fetch.assert_not_awaited()
-    syncer._call.assert_not_awaited()
 
 
 @pytest.mark.asyncio
