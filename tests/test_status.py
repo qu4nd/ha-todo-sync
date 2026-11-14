@@ -233,9 +233,10 @@ async def test_apply_counts_create_update_and_delete_only(syncer):
         "description": "",
     }
 
-    assert await syncer._apply("todo.b", {}, "milk", target) is True
-    assert await syncer._apply("todo.b", {"milk": target}, "milk", target) is False
-    assert await syncer._apply("todo.b", {"milk": target}, "milk", None) is True
+    key = _identity("Milk", "")
+    assert await syncer._apply("todo.b", {}, key, target) is True
+    assert await syncer._apply("todo.b", {key: target}, key, target) is False
+    assert await syncer._apply("todo.b", {key: target}, key, None) is True
     assert syncer._call.await_count == 2
 
 
