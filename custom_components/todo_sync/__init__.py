@@ -26,7 +26,6 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.helpers.storage import Store
 
-from .models import ItemKey, TodoItem
 from .const import (
     CONF_INTERVAL,
     CONF_LIST_A,
@@ -36,6 +35,7 @@ from .const import (
     SCAN_INTERVAL_MINUTES,
     STORAGE_VERSION,
 )
+from .models import ItemKey, TodoItem
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,6 +46,8 @@ PENDING_WRITE_SECONDS = 600
 CONFIRM_SECONDS = 360  # longer than the slowest source poll (Alexa: 300 s)
 DONE = "completed"
 OPEN = "needs_action"
+
+
 def _identity(name: str, description: str) -> ItemKey:
     """Build the normalized identity shared by all providers."""
     return ItemKey(name, description)
@@ -156,7 +158,9 @@ class TodoSyncer:
             if isinstance(item, dict) and item.get("name"):
                 key = _identity(item["name"], item.get("description") or "")
                 # Older snapshots may contain provider UIDs; they are never shared identity.
-                migrated_item = {field: value for field, value in item.items() if field != "uid"}
+                migrated_item = {
+                    field: value for field, value in item.items() if field != "uid"
+                }
                 migrated[key] = migrated_item
                 continue
 
@@ -171,7 +175,11 @@ class TodoSyncer:
     def _store_data(self) -> dict:
         # Storage remains JSON-compatible and keeps the pre-model identity keys.
         snapshot = {
-            key.storage_key: {field: value for field, value in item.items() if field != "uid"}
+            key.storage_key: (
+                {field: value for field, value in item.items() if field != "uid"}
+                if isinstance(item, dict)
+                else item
+            )
             for key, item in self._snapshot.items()
         }
         return {
@@ -403,7 +411,7 @@ class TodoSyncer:
     ) -> bool:
         existing = current.get(key)
 
-        def service_item(item: dict) -> str:
+        def service_item(item: TodoItem) -> str:
             """Prefer the provider UID; a summary is safe only when it is unique."""
             if item.get("uid"):
                 return item["uid"]
@@ -445,7 +453,6 @@ class TodoSyncer:
                 "name": target["name"],
                 "status": OPEN,
                 "description": target["description"],
-                "uid": None,
             }
             # add_item cannot set a completed status. Resolve the newly created
             # item's UID before updating it, so another item with the same summary
@@ -471,7 +478,8 @@ class TodoSyncer:
                 )
                 if created_item is None:
                     raise RuntimeError("Could not safely identify newly created to-do item")
-                existing["uid"] = created_item.get("uid")
+                if created_item.get("uid"):
+                    existing["uid"] = created_item["uid"]
         data = {"entity_id": entity_id, "item": service_item(existing)}
         if existing["status"] != target["status"]:
             data["status"] = target["status"]
