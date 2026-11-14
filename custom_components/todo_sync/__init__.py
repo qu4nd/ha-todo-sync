@@ -167,7 +167,7 @@ class TodoSyncer:
             # Preserve malformed/legacy entries as far as possible instead of dropping data.
             try:
                 key = ItemKey.from_storage_key(old_key)
-            except (TypeError, ValueError, json.JSONDecodeError):
+            except (TypeError, ValueError):
                 key = ItemKey(str(old_key))
             migrated[key] = item
         return migrated
