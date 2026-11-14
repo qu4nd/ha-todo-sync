@@ -921,6 +921,7 @@ async def test_unready_list_is_exposed_in_status(hass, syncer, state, expected_s
         hass.states.async_set("todo.b", state)
     scheduled = []
     syncer._schedule = lambda trigger, delay: scheduled.append((trigger, delay))
+    syncer._fetch = AsyncMock()
 
     await syncer._run(None)
 
@@ -929,7 +930,7 @@ async def test_unready_list_is_exposed_in_status(hass, syncer, state, expected_s
     assert syncer.status_attributes["waiting_state"] == expected_state
     assert scheduled == [(None, RETRY_SECONDS)]
     # Missing/unavailable entity checks use the local HA state machine only.
-    assert syncer._fetch.await_count == 0
+    syncer._fetch.assert_not_awaited()
 
 
 @pytest.mark.asyncio
