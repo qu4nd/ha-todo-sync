@@ -155,7 +155,7 @@ async def test_restart_restores_held_back_state(syncer):
 
     assert syncer.status == "held_back"
     assert syncer.status_attributes["last_success"] == "2026-11-12T12:00:00+00:00"
-    assert syncer._suspect is None
+    assert syncer._empty_list_guard.suspect is None
 
 
 @pytest.mark.asyncio
