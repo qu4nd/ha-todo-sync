@@ -652,7 +652,6 @@ class TodoSyncer:
 
     async def _sync(self, trigger: str | None) -> bool:
         self._sync_deferred = False
-        self._last_synced_items = 0
         # Read both lists completely before applying anything. A failed read must
         # never be interpreted as an empty list or advance the persisted snapshot.
         raw_a, raw_b = await self._read_lists()
@@ -664,6 +663,7 @@ class TodoSyncer:
         if self._defer_if_empty_list_is_suspect(items_a, items_b, trigger):
             return False
 
+        self._last_synced_items = 0
         snapshot = self._snapshot
         trigger_side = (
             "A" if trigger == self.a else "B" if trigger == self.b else "periodic"
