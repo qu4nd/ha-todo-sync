@@ -8,6 +8,7 @@ RETRY_SECONDS = 30
 MAX_RETRY_SECONDS = 300
 # Longer than the slowest source poll (Alexa: 300 s).
 CONFIRM_SECONDS = 360
+EMPTY_LIST_RECHECK_SECONDS = CONFIRM_SECONDS + 10
 
 
 def calculate_retry_delay(attempt: int, base_delay: int, max_delay: int) -> int:
