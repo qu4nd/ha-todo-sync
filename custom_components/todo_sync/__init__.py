@@ -652,6 +652,7 @@ class TodoSyncer:
 
     async def _sync(self, trigger: str | None) -> bool:
         self._sync_deferred = False
+        self._last_synced_items = 0
         # Read both lists completely before applying anything. A failed read must
         # never be interpreted as an empty list or advance the persisted snapshot.
         raw_a, raw_b = await self._read_lists()
