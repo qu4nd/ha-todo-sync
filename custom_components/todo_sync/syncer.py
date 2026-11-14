@@ -83,7 +83,7 @@ class TodoSyncer:
         self._status_listeners = []
         # Transient states (notably syncing) stay in memory and are not persisted.
         self._persisted_status = self._status
-        
+
     async def async_start(self) -> None:
         data = await self._store.async_load()
         self._snapshot = self._store.migrate_snapshot((data or {}).get("snapshot", {}))
