@@ -14,6 +14,7 @@ from custom_components.todo_sync import (
     _identity,
 )
 from custom_components.todo_sync.const import CONF_LIST_A, CONF_LIST_B
+from custom_components.todo_sync.models import SyncState, SyncStatus
 
 
 @pytest.fixture
@@ -382,7 +383,7 @@ async def test_new_item_on_a_is_applied_to_b(syncer):
     assert syncer._snapshot == {_identity("Milch", "3"): source}
     syncer._store.async_save.assert_awaited_once_with({
         "snapshot": {_identity("Milch", "3").storage_key: source},
-        "status": syncer._persisted_status,
+        "status": syncer._persisted_status.to_dict(),
         "pending_writes": {
             syncer._pending_key("todo.b", _identity("Milch", "3")): {
                 "entity_id": "todo.b", "key": _identity("Milch", "3").storage_key,
@@ -844,6 +845,71 @@ async def test_successful_sync_resets_write_retry_backoff(syncer):
     assert syncer._retry_attempt == 0
 
 
+def test_sync_status_round_trips_legacy_storage_and_exposes_compatible_attributes():
+    stored = {
+        "state": "success",
+        "last_success": "2026-11-14T20:00:00+00:00",
+        "last_error": None,
+        "synced_items": 3,
+        "last_error_type": None,
+        "waiting_entity": None,
+        "waiting_state": None,
+    }
+
+    status = SyncStatus.from_dict(stored)
+
+    assert status == SyncStatus(
+        state=SyncState.SUCCESS,
+        last_success="2026-11-14T20:00:00+00:00",
+        synced_items=3,
+    )
+    assert status.to_dict() == stored
+    assert status.attributes == {
+        key: value for key, value in stored.items() if key != "state"
+    }
+
+
+def test_sync_status_defaults_unknown_legacy_state_to_idle():
+    status = SyncStatus.from_dict({"state": "unknown_future_state", "synced_items": "bad"})
+
+    assert status.state is SyncState.IDLE
+    assert status.synced_items == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("sync_result", "deferred", "expected_state", "expected_error"),
+    [
+        (False, False, SyncState.SUCCESS, None),
+        (True, False, SyncState.ERROR, "WriteError"),
+        (False, True, SyncState.HELD_BACK, None),
+        (_TodoListReadError("todo.a"), False, SyncState.ERROR, "TodoListReadError"),
+    ],
+)
+async def test_run_uses_explicit_terminal_status_states(
+    syncer, sync_result, deferred, expected_state, expected_error
+):
+    syncer._ready = lambda: True
+    syncer._sync_deferred = deferred
+    syncer._sync = AsyncMock(
+        side_effect=sync_result if isinstance(sync_result, Exception) else None,
+        return_value=sync_result if not isinstance(sync_result, Exception) else None,
+    )
+    syncer._schedule = Mock()
+    syncer._fetch = AsyncMock()
+    syncer._call = AsyncMock()
+
+    await syncer._run(None)
+
+    assert syncer._status.state is expected_state
+    assert syncer.status == expected_state.value
+    assert syncer.status_attributes["last_error_type"] == expected_error
+    # Status transitions use the run result and local state only; they do not
+    # introduce additional provider reads or write-service calls.
+    syncer._fetch.assert_not_awaited()
+    syncer._call.assert_not_awaited()
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("state", "expected_state"),
@@ -862,6 +928,8 @@ async def test_unready_list_is_exposed_in_status(hass, syncer, state, expected_s
     assert syncer.status_attributes["waiting_entity"] == "todo.b"
     assert syncer.status_attributes["waiting_state"] == expected_state
     assert scheduled == [(None, RETRY_SECONDS)]
+    # Missing/unavailable entity checks use the local HA state machine only.
+    assert syncer._fetch.await_count == 0
 
 
 @pytest.mark.asyncio
