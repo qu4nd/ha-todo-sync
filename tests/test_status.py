@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.todo_sync import TodoSyncer, _TodoListReadError, _identity
 from custom_components.todo_sync.const import CONF_LIST_A, CONF_LIST_B
-from custom_components.todo_sync.models import SyncState, SyncStatus
+from custom_components.todo_sync.status import SyncState, SyncStatus
+from custom_components.todo_sync.syncer import TodoSyncer, _TodoListReadError, _identity
 
 
 @pytest.fixture
@@ -103,9 +103,9 @@ async def test_status_is_persisted_and_notifies_listeners(syncer):
     }
     assert notified == [True]
     syncer._store.async_delay_save.assert_called_once()
-    data_func, delay = syncer._store.async_delay_save.call_args.args
+    data, delay = syncer._store.async_delay_save.call_args.args
     assert delay == 5
-    assert data_func() == {
+    assert data == {
         "snapshot": {}, "status": syncer._status.to_dict(), "pending_writes": {}
     }
     syncer._store.async_save.assert_not_awaited()
