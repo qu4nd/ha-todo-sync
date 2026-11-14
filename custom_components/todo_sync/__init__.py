@@ -35,6 +35,7 @@ from .const import (
     SCAN_INTERVAL_MINUTES,
     STORAGE_VERSION,
 )
+from .models import ItemKey, TodoItem
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,15 +46,11 @@ PENDING_WRITE_SECONDS = 600
 CONFIRM_SECONDS = 360  # longer than the slowest source poll (Alexa: 300 s)
 DONE = "completed"
 OPEN = "needs_action"
-def _key(summary: str) -> str:
-    return summary.strip().casefold()
 
 
-def _identity(name: str, description: str) -> str:
-    """Return a stable, unambiguous identity for a name/details pair."""
-    return json.dumps(
-        [_key(name), _key(description)], ensure_ascii=False, separators=(",", ":")
-    )
+def _identity(name: str, description: str) -> ItemKey:
+    """Build the normalized identity shared by all providers."""
+    return ItemKey(name, description)
 
 
 class _TodoListReadError(Exception):
@@ -72,7 +69,8 @@ class TodoSyncer:
         self._lock = asyncio.Lock()
         # Last successfully synchronized state, keyed by normalized name + description.
         # Comparing both live lists with this baseline lets us tell which side changed.
-        self._snapshot: dict[str, dict] = {}
+        # ItemKey keeps normalized name/details identity separate from provider addressing.
+        self._snapshot: dict[ItemKey, TodoItem] = {}
         # Expected destination values protect against providers that expose writes late.
         self._pending_writes: dict[str, dict] = {}
         self._unsubs: list[CALLBACK_TYPE] = []
@@ -153,21 +151,39 @@ class TodoSyncer:
             listener()
 
     @staticmethod
-    def _migrate_snapshot(snapshot: dict) -> dict[str, dict]:
-        """Upgrade name-keyed snapshots to the name/details identity format."""
-        migrated: dict[str, dict] = {}
+    def _migrate_snapshot(snapshot: dict) -> dict[ItemKey, TodoItem]:
+        """Load legacy or current storage keys into the explicit in-memory model."""
+        migrated: dict[ItemKey, TodoItem] = {}
         for old_key, item in snapshot.items():
-            if not isinstance(item, dict) or not item.get("name"):
-                migrated[old_key] = item
+            if isinstance(item, dict) and item.get("name"):
+                key = _identity(item["name"], item.get("description") or "")
+                # Older snapshots may contain provider UIDs; they are never shared identity.
+                migrated_item = {
+                    field: value for field, value in item.items() if field != "uid"
+                }
+                migrated[key] = migrated_item
                 continue
-            description = (item.get("description") or "").strip()
-            key = _identity(item["name"], description)
+
+            # Preserve malformed/legacy entries as far as possible instead of dropping data.
+            try:
+                key = ItemKey.from_storage_key(old_key)
+            except (TypeError, ValueError):
+                key = ItemKey(str(old_key))
             migrated[key] = item
         return migrated
 
     def _store_data(self) -> dict:
+        # Storage remains JSON-compatible and keeps the pre-model identity keys.
+        snapshot = {
+            key.storage_key: (
+                {field: value for field, value in item.items() if field != "uid"}
+                if isinstance(item, dict)
+                else item
+            )
+            for key, item in self._snapshot.items()
+        }
         return {
-            "snapshot": copy.deepcopy(self._snapshot),
+            "snapshot": copy.deepcopy(snapshot),
             "status": dict(self._persisted_status),
             "pending_writes": copy.deepcopy(self._pending_writes),
         }
@@ -337,8 +353,8 @@ class TodoSyncer:
         )
         return resp[entity_id]["items"]
 
-    def _parse(self, entity_id: str, raw: list[dict]) -> dict[str, dict]:
-        items: dict[str, dict] = {}
+    def _parse(self, entity_id: str, raw: list[dict]) -> dict[ItemKey, TodoItem]:
+        items: dict[ItemKey, TodoItem] = {}
         supports = self._supports_description(entity_id)
         for item in raw:
             title = item["summary"].strip()
@@ -346,7 +362,9 @@ class TodoSyncer:
             if not supports:
                 name, desc = self._split_title(title)
             if name:
-                parsed_item = {
+                # Keep the original provider title for safe service addressing;
+                # it is not part of cross-provider identity.
+                parsed_item: TodoItem = {
                     "title": title,
                     "name": name,
                     "status": item["status"],
@@ -371,22 +389,29 @@ class TodoSyncer:
         return bool(features & TodoListEntityFeature.SET_DESCRIPTION_ON_ITEM)
 
     def _title(self, entity_id: str, name: str, desc: str) -> str:
-        # Lists without description support carry the details in the title: "Milch 3"
+        # Title-only providers (notably Alexa) carry details in the title. Keep this
+        # translation at the provider boundary; the shared ItemKey remains name/details.
         if desc and not self._supports_description(entity_id):
             return f"{name} {desc}"
         return name
 
     @staticmethod
-    def _val(item: dict | None):
+    def _val(item: TodoItem | None) -> tuple[str, str] | None:
         return None if item is None else (item["status"], item.get("description", ""))
 
     async def _call(self, service: str, data: dict) -> None:
         await self.hass.services.async_call("todo", service, data, blocking=True)
 
-    async def _apply(self, entity_id: str, current: dict, key: str, target: dict | None) -> bool:
+    async def _apply(
+        self,
+        entity_id: str,
+        current: dict[ItemKey, TodoItem],
+        key: ItemKey,
+        target: TodoItem | None,
+    ) -> bool:
         existing = current.get(key)
 
-        def service_item(item: dict) -> str:
+        def service_item(item: TodoItem) -> str:
             """Prefer the provider UID; a summary is safe only when it is unique."""
             if item.get("uid"):
                 return item["uid"]
@@ -399,6 +424,8 @@ class TodoSyncer:
                 )
             return item["title"]
 
+        # The key is provider-independent; the stored title/UID below is deliberately
+        # provider-specific and is used only to address the destination service.
         # A missing target means the source side deleted this item. Remove it only
         # when it exists on the destination; otherwise there is nothing to apply.
         if target is None:
@@ -426,7 +453,6 @@ class TodoSyncer:
                 "name": target["name"],
                 "status": OPEN,
                 "description": target["description"],
-                "uid": None,
             }
             # add_item cannot set a completed status. Resolve the newly created
             # item's UID before updating it, so another item with the same summary
@@ -452,7 +478,8 @@ class TodoSyncer:
                 )
                 if created_item is None:
                     raise RuntimeError("Could not safely identify newly created to-do item")
-                existing["uid"] = created_item.get("uid")
+                if created_item.get("uid"):
+                    existing["uid"] = created_item["uid"]
         data = {"entity_id": entity_id, "item": service_item(existing)}
         if existing["status"] != target["status"]:
             data["status"] = target["status"]
@@ -469,7 +496,9 @@ class TodoSyncer:
         return changed
 
     def _empty_list_suspects(
-        self, items_a: dict[str, dict], items_b: dict[str, dict]
+        self,
+        items_a: dict[ItemKey, TodoItem],
+        items_b: dict[ItemKey, TodoItem],
     ) -> frozenset[str]:
         """Return the IDs of completely empty lists while open snapshot items exist."""
         if not any(item["status"] == OPEN for item in self._snapshot.values()):
@@ -500,11 +529,17 @@ class TodoSyncer:
         return True
 
     @staticmethod
-    def _pending_key(entity_id: str, key: str) -> str:
-        return json.dumps([entity_id, key], ensure_ascii=False, separators=(",", ":"))
+    def _pending_key(entity_id: str, key: ItemKey) -> str:
+        return json.dumps(
+            [entity_id, key.storage_key], ensure_ascii=False, separators=(",", ":")
+        )
 
     def _track_pending_write(
-        self, entity_id: str, key: str, before: dict | None, expected: dict | None
+        self,
+        entity_id: str,
+        key: ItemKey,
+        before: TodoItem | None,
+        expected: TodoItem | None,
     ) -> None:
         expected_item = None
         if expected is not None:
@@ -516,7 +551,7 @@ class TodoSyncer:
             }
         self._pending_writes[self._pending_key(entity_id, key)] = {
             "entity_id": entity_id,
-            "key": key,
+            "key": key.storage_key,
             "before": list(self._val(before)) if before is not None else None,
             "expected": list(self._val(expected)) if expected is not None else None,
             "item": expected_item,
@@ -524,7 +559,9 @@ class TodoSyncer:
         }
 
     def _resolve_pending_writes(
-        self, items_a: dict[str, dict], items_b: dict[str, dict]
+        self,
+        items_a: dict[ItemKey, TodoItem],
+        items_b: dict[ItemKey, TodoItem],
     ) -> None:
         """Mask only stale destination reads while the source still has our expected value."""
         now = time.time()
@@ -532,7 +569,8 @@ class TodoSyncer:
             if pending.get("expires", 0) <= now:
                 self._pending_writes.pop(pending_id, None)
                 continue
-            entity_id, key = pending["entity_id"], pending["key"]
+            entity_id = pending["entity_id"]
+            key = ItemKey.from_storage_key(pending["key"])
             destination = items_a if entity_id == self.a else items_b
             source = items_b if entity_id == self.a else items_a
             current_item = destination.get(key)
@@ -563,11 +601,12 @@ class TodoSyncer:
 
     def _prepare_items(
         self, raw_a: list[dict], raw_b: list[dict]
-    ) -> tuple[dict[str, dict], dict[str, dict]]:
+    ) -> tuple[dict[ItemKey, TodoItem], dict[ItemKey, TodoItem]]:
         """Parse provider data and resolve reads that are stale after our own writes."""
         # Providers without description support encode details after the first
         # word in the title. This deterministic rule keeps identity consistent
-        # regardless of which provider supplied the item.
+        # regardless of which provider supplied the item; ItemKey then normalizes
+        # both fields identically on every provider.
         items_a = self._parse(self.a, raw_a)
         items_b = self._parse(self.b, raw_b)
         self._resolve_pending_writes(items_a, items_b)
@@ -575,8 +614,8 @@ class TodoSyncer:
 
     def _defer_if_empty_list_is_suspect(
         self,
-        items_a: dict[str, dict],
-        items_b: dict[str, dict],
+        items_a: dict[ItemKey, TodoItem],
+        items_b: dict[ItemKey, TodoItem],
         trigger: str | None,
     ) -> bool:
         """Hold back deletions until a transient empty-list result is confirmed."""
@@ -588,12 +627,12 @@ class TodoSyncer:
 
     async def _sync_item(
         self,
-        key: str,
-        items_a: dict[str, dict],
-        items_b: dict[str, dict],
-        snapshot: dict[str, dict],
+        key: ItemKey,
+        items_a: dict[ItemKey, TodoItem],
+        items_b: dict[ItemKey, TodoItem],
+        snapshot: dict[ItemKey, TodoItem],
         trigger: str | None,
-        new_snapshot: dict[str, dict],
+        new_snapshot: dict[ItemKey, TodoItem],
     ) -> bool:
         """Resolve and apply one item's three-way diff; return whether its write failed."""
         a, b, s = items_a.get(key), items_b.get(key), snapshot.get(key)
@@ -672,7 +711,7 @@ class TodoSyncer:
             "Sync started (trigger=%s): list A=%d items, list B=%d items, snapshot=%d",
             trigger_side, len(items_a), len(items_b), len(snapshot),
         )
-        new_snapshot: dict[str, dict] = {}
+        new_snapshot: dict[ItemKey, TodoItem] = {}
         write_failed = False
 
         # Three-way diff: compare each side (A/B) with the last synced value (snapshot).

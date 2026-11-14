@@ -207,6 +207,29 @@ def test_migrate_preserves_name_and_numeric_detail_pair(syncer):
     }
 
 
+def test_migrate_snapshot_drops_provider_local_uid(syncer):
+    old = {
+        "milk": {
+            "title": "Milk 3",
+            "name": "Milk",
+            "status": "needs_action",
+            "description": "3",
+            "uid": "bring-local-123",
+        }
+    }
+
+    migrated = syncer._migrate_snapshot(old)
+
+    assert migrated == {
+        _identity("Milk", "3"): {
+            "title": "Milk 3",
+            "name": "Milk",
+            "status": "needs_action",
+            "description": "3",
+        }
+    }
+
+
 def test_migrate_name_keyed_snapshot(syncer):
     old = {"pizza": item("Pizza", description="4 Käse")}
 
@@ -358,11 +381,11 @@ async def test_new_item_on_a_is_applied_to_b(syncer):
     syncer._apply.assert_awaited_once_with("todo.b", {}, _identity("Milch", "3"), source)
     assert syncer._snapshot == {_identity("Milch", "3"): source}
     syncer._store.async_save.assert_awaited_once_with({
-        "snapshot": {_identity("Milch", "3"): source},
+        "snapshot": {_identity("Milch", "3").storage_key: source},
         "status": syncer._persisted_status,
         "pending_writes": {
             syncer._pending_key("todo.b", _identity("Milch", "3")): {
-                "entity_id": "todo.b", "key": _identity("Milch", "3"),
+                "entity_id": "todo.b", "key": _identity("Milch", "3").storage_key,
                 "before": None, "expected": ["needs_action", "3"],
                 "item": {"title": "Milch", "name": "Milch", "status": "needs_action", "description": "3"},
                 "expires": syncer._pending_writes[syncer._pending_key("todo.b", _identity("Milch", "3"))]["expires"],
@@ -622,17 +645,17 @@ async def test_deleting_completed_item_keeps_history_on_other_list(syncer):
 
 def test_empty_list_suspects_only_when_a_list_is_completely_empty(syncer):
     syncer._snapshot = {
-        "milk": item("Milk"),
-        "bread": item("Bread"),
+        _identity("Milk", ""): item("Milk"),
+        _identity("Bread", ""): item("Bread"),
     }
-    partial_a = {"bread": item("Bread")}
+    partial_a = {_identity("Bread", ""): item("Bread")}
 
     assert syncer._empty_list_suspects(partial_a, dict(syncer._snapshot)) == frozenset()
     assert syncer._empty_list_suspects({}, dict(syncer._snapshot)) == frozenset({"todo.a"})
 
 
 def test_empty_list_suspects_ignore_snapshots_without_open_items(syncer):
-    syncer._snapshot = {"milk": item("Milk", status="completed")}
+    syncer._snapshot = {_identity("Milk", ""): item("Milk", status="completed")}
 
     assert syncer._empty_list_suspects({}, {}) == frozenset()
 
