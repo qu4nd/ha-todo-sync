@@ -488,7 +488,9 @@ class TodoSyncer:
         return changed
 
     def _empty_list_suspects(
-        self, items_a: dict[str, dict], items_b: dict[str, dict]
+        self,
+        items_a: dict[ItemKey, TodoItem],
+        items_b: dict[ItemKey, TodoItem],
     ) -> frozenset[str]:
         """Return the IDs of completely empty lists while open snapshot items exist."""
         if not any(item["status"] == OPEN for item in self._snapshot.values()):
@@ -604,8 +606,8 @@ class TodoSyncer:
 
     def _defer_if_empty_list_is_suspect(
         self,
-        items_a: dict[str, dict],
-        items_b: dict[str, dict],
+        items_a: dict[ItemKey, TodoItem],
+        items_b: dict[ItemKey, TodoItem],
         trigger: str | None,
     ) -> bool:
         """Hold back deletions until a transient empty-list result is confirmed."""
