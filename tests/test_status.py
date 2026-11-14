@@ -18,8 +18,8 @@ def syncer(hass):
         data={CONF_LIST_A: "todo.a", CONF_LIST_B: "todo.b"},
     )
     instance = TodoSyncer(hass, entry)
-    instance._store.async_save = AsyncMock()
-    instance._store.async_delay_save = Mock()
+    instance._store._store.async_save = AsyncMock()
+    instance._store._store.async_delay_save = Mock()
     return instance
 
 
@@ -102,13 +102,13 @@ async def test_status_is_persisted_and_notifies_listeners(syncer):
         "waiting_state": None,
     }
     assert notified == [True]
-    syncer._store.async_delay_save.assert_called_once()
-    data, delay = syncer._store.async_delay_save.call_args.args
+    syncer._store._store.async_delay_save.assert_called_once()
+    data_factory, delay = syncer._store._store.async_delay_save.call_args.args
     assert delay == 5
-    assert data == {
+    assert data_factory() == {
         "snapshot": {}, "status": syncer._status.to_dict(), "pending_writes": {}
     }
-    syncer._store.async_save.assert_not_awaited()
+    syncer._store._store.async_save.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -163,7 +163,7 @@ async def test_held_back_status_clears_when_mass_delete_is_confirmed(syncer):
     syncer._ready = lambda: True
     previous_success = "2026-11-12T12:00:00+00:00"
     await syncer._set_status("success", last_success=previous_success)
-    syncer._store.async_delay_save.reset_mock()
+    syncer._store._store.async_delay_save.reset_mock()
 
     deferred = True
 
@@ -226,7 +226,7 @@ async def test_stop_flushes_latest_snapshot(syncer):
 
     await syncer.async_stop()
 
-    syncer._store.async_save.assert_awaited_once_with(syncer._store_data())
+    syncer._store._store.async_save.assert_awaited_once_with(syncer._store_data())
 
 
 @pytest.mark.asyncio
