@@ -1,5 +1,6 @@
 """Unit tests for the bidirectional synchronization logic."""
 
+from itertools import permutations
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -803,3 +804,81 @@ async def test_unready_list_status_clears_when_list_returns(hass, syncer):
     assert syncer.status == "success"
     assert syncer.status_attributes["waiting_entity"] is None
     assert syncer.status_attributes["waiting_state"] is None
+
+
+@pytest.mark.parametrize(
+    ("first", "second", "expected_count"),
+    [
+        (
+            {"summary": " Milk ", "description": " 3 ", "status": "needs_action"},
+            {"summary": "milk", "description": "3", "status": "needs_action"},
+            1,
+        ),
+        (
+            {"summary": "Milk", "description": "3", "status": "needs_action"},
+            {"summary": "Milk", "description": "oat", "status": "needs_action"},
+            2,
+        ),
+        (
+            {"summary": "Milk", "description": "3", "status": "needs_action"},
+            {"summary": "Bread", "description": "3", "status": "needs_action"},
+            2,
+        ),
+    ],
+)
+def test_parse_matches_items_by_normalized_name_and_description(
+    syncer, first, second, expected_count
+):
+    syncer._supports_description = lambda _entity_id: True
+
+    parsed = syncer._parse("todo.a", [first, second])
+
+    assert len(parsed) == expected_count
+
+
+_ORDERING_ITEMS = (
+    {
+        "summary": "Pizza",
+        "description": "4 Käse",
+        "status": "needs_action",
+        "uid": "pizza-cheese",
+    },
+    {
+        "summary": "Pizza",
+        "description": "4 Stagioni",
+        "status": "needs_action",
+        "uid": "pizza-stagioni",
+    },
+    {
+        "summary": "Milch",
+        "description": "1 l",
+        "status": "needs_action",
+        "uid": "milk",
+    },
+)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("items_a", "items_b"),
+    [
+        (list(order_a), list(order_b))
+        for order_a in permutations(_ORDERING_ITEMS)
+        for order_b in permutations(_ORDERING_ITEMS)
+    ],
+)
+async def test_sync_does_not_depend_on_provider_item_order(syncer, items_a, items_b):
+    expected_snapshot = {
+        _identity("Pizza", "4 Käse"): item("Pizza", description="4 Käse"),
+        _identity("Pizza", "4 Stagioni"): item("Pizza", description="4 Stagioni"),
+        _identity("Milch", "1 l"): item("Milch", description="1 l"),
+    }
+    syncer._snapshot = dict(expected_snapshot)
+    syncer._fetch = AsyncMock(side_effect=[items_a, items_b])
+    syncer._supports_description = lambda _entity_id: True
+    syncer._apply = AsyncMock()
+
+    await syncer._sync("todo.a")
+
+    syncer._apply.assert_not_awaited()
+    assert syncer._snapshot == expected_snapshot
