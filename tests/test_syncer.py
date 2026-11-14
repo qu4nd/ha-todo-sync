@@ -6,14 +6,10 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.todo_sync import (
-    MAX_RETRY_SECONDS,
-    RETRY_SECONDS,
-    TodoSyncer,
-    _TodoListReadError,
-    _identity,
-)
 from custom_components.todo_sync.const import CONF_LIST_A, CONF_LIST_B
+from custom_components.todo_sync.policy import MAX_RETRY_SECONDS, RETRY_SECONDS
+from custom_components.todo_sync.storage import TodoSyncStorage
+from custom_components.todo_sync.syncer import TodoSyncer, _TodoListReadError, _identity
 
 
 @pytest.fixture
@@ -84,7 +80,7 @@ def test_pending_write_expires(syncer):
 
 @pytest.mark.asyncio
 async def test_unchanged_store_payload_is_not_written(syncer):
-    syncer._last_saved_data = syncer._store_data()
+    syncer._store.set_loaded_data(syncer._store_data())
 
     await syncer._save_store()
 
@@ -202,7 +198,7 @@ def test_migrate_preserves_name_and_numeric_detail_pair(syncer):
         }
     }
 
-    assert syncer._migrate_snapshot(old) == {
+    assert TodoSyncStorage.migrate_snapshot(old) == {
         _identity("Pizza", "4 Käse"): old["pizza"]
     }
 
