@@ -13,7 +13,6 @@ import copy
 import json
 import logging
 import time
-from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 from homeassistant.components.todo import TodoListEntityFeature
@@ -299,7 +298,7 @@ class TodoSyncer:
             except Exception as err:  # noqa: BLE001
                 _LOGGER.error("Synchronization failed (%s)", type(err).__name__)
                 await self._set_status(
-                    "error",
+                    SyncState.ERROR,
                     last_error=self._now(),
                     last_error_type=type(err).__name__,
                     synced_items=self._last_synced_items,
