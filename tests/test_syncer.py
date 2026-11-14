@@ -472,6 +472,59 @@ async def test_failed_apply_keeps_previous_snapshot_for_retry(syncer):
 
 
 @pytest.mark.asyncio
+async def test_sync_continues_after_write_failure_and_preserves_only_failed_snapshot(
+    syncer,
+):
+    old_items = {
+        _identity("Milch", ""): item("Milch"),
+        _identity("Brot", ""): item("Brot"),
+    }
+    changed_items = {
+        _identity("Milch", ""): item("Milch", status="completed"),
+        _identity("Brot", ""): item("Brot", status="completed"),
+    }
+    syncer._snapshot = dict(old_items)
+    syncer._fetch = AsyncMock(
+        side_effect=[
+            [
+                {"summary": name, "status": "completed", "description": ""}
+                for name in ("Milch", "Brot")
+            ],
+            [
+                {"summary": name, "status": "needs_action", "description": ""}
+                for name in ("Milch", "Brot")
+            ],
+        ]
+    )
+    syncer._supports_description = lambda _entity_id: True
+    attempted_keys = []
+
+    async def apply_with_one_failure(_entity_id, _current, key, _target):
+        attempted_keys.append(key)
+        if len(attempted_keys) == 1:
+            raise RuntimeError("temporary service error")
+        return True
+
+    syncer._apply = AsyncMock(side_effect=apply_with_one_failure)
+
+    write_failed = await syncer._sync("todo.a")
+
+    assert write_failed is True
+    assert set(attempted_keys) == set(old_items)
+    assert syncer._apply.await_count == 2
+
+    failed_key = attempted_keys[0]
+    successful_key = attempted_keys[1]
+    assert syncer._snapshot == {
+        failed_key: old_items[failed_key],
+        successful_key: changed_items[successful_key],
+    }
+    assert syncer._last_synced_items == 1
+    assert syncer._pending_key("todo.b", successful_key) in syncer._pending_writes
+    assert syncer._pending_key("todo.b", failed_key) not in syncer._pending_writes
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("trigger", "fetch_results", "destination"),
     [
