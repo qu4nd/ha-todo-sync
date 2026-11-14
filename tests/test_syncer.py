@@ -207,6 +207,29 @@ def test_migrate_preserves_name_and_numeric_detail_pair(syncer):
     }
 
 
+def test_migrate_snapshot_drops_provider_local_uid(syncer):
+    old = {
+        "milk": {
+            "title": "Milk 3",
+            "name": "Milk",
+            "status": "needs_action",
+            "description": "3",
+            "uid": "bring-local-123",
+        }
+    }
+
+    migrated = syncer._migrate_snapshot(old)
+
+    assert migrated == {
+        _identity("Milk", "3"): {
+            "title": "Milk 3",
+            "name": "Milk",
+            "status": "needs_action",
+            "description": "3",
+        }
+    }
+
+
 def test_migrate_name_keyed_snapshot(syncer):
     old = {"pizza": item("Pizza", description="4 Käse")}
 
