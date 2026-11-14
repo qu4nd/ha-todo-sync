@@ -38,6 +38,7 @@ from .const import (
 from .models import ItemKey, SyncState, SyncStatus, TodoItem
 from .policy import (
     CONFIRM_SECONDS,
+    EMPTY_LIST_RECHECK_SECONDS,
     MAX_RETRY_SECONDS,
     RETRY_SECONDS,
     EmptyListGuard,
@@ -612,7 +613,7 @@ class TodoSyncer:
         if not self._hold_back(self._empty_list_suspects(items_a, items_b)):
             return False
         self._sync_deferred = True
-        self._schedule(trigger, CONFIRM_SECONDS + 10)
+        self._schedule(trigger, EMPTY_LIST_RECHECK_SECONDS)
         return True
 
     async def _sync_item(
