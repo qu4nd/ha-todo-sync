@@ -36,14 +36,20 @@ from .const import (
     STORAGE_VERSION,
 )
 from .models import ItemKey, SyncState, SyncStatus, TodoItem
+from .policy import (
+    CONFIRM_SECONDS,
+    EMPTY_LIST_RECHECK_SECONDS,
+    MAX_RETRY_SECONDS,
+    RETRY_SECONDS,
+    EmptyListGuard,
+    calculate_retry_delay,
+    select_retry_trigger,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["button", "sensor"]
-RETRY_SECONDS = 30
-MAX_RETRY_SECONDS = 300
 PENDING_WRITE_SECONDS = 600
-CONFIRM_SECONDS = 360  # longer than the slowest source poll (Alexa: 300 s)
 DONE = "completed"
 OPEN = "needs_action"
 
@@ -77,7 +83,7 @@ class TodoSyncer:
         self._debounce: CALLBACK_TYPE | None = None
         # Remember the latest list that caused a run; it breaks simultaneous-change ties.
         self._pending_trigger: str | None = None
-        self._suspect: tuple[frozenset[str], float] | None = None
+        self._empty_list_guard = EmptyListGuard()
         self._stopped = False
         self._retry_attempt = 0
         self._last_synced_items = 0
@@ -326,13 +332,11 @@ class TodoSyncer:
     def _schedule_retry(self, trigger: str | None, reason: str) -> None:
         """Schedule a bounded retry while preserving the most recent change trigger."""
         self._retry_attempt += 1
-        delay = min(
-            RETRY_SECONDS * 2 ** (self._retry_attempt - 1),
-            MAX_RETRY_SECONDS,
+        delay = calculate_retry_delay(
+            self._retry_attempt, RETRY_SECONDS, MAX_RETRY_SECONDS
         )
         _LOGGER.warning("%s; retrying in %s seconds", reason, delay)
-        # Keep the original trigger unless a newer state change arrived while syncing.
-        retry_trigger = self._pending_trigger or trigger
+        retry_trigger = select_retry_trigger(self._pending_trigger, trigger)
         self._schedule(retry_trigger, delay)
 
     async def _fetch(self, entity_id: str) -> list[dict]:
@@ -503,22 +507,17 @@ class TodoSyncer:
 
     def _hold_back(self, suspects: frozenset) -> bool:
         """True while an empty-list result is not yet confirmed."""
-        now = time.monotonic()
-        if not suspects:
-            self._suspect = None
-            return False
-        if self._suspect is None or self._suspect[0] != suspects:
-            self._suspect = (suspects, now)
-        waited = now - self._suspect[1]
-        if waited >= CONFIRM_SECONDS:
-            return False
-        _LOGGER.warning(
-            "A list that still has open snapshot items appears empty; "
-            "holding back and re-checking "
-            "in %d s (accepted if the result stays the same)",
-            CONFIRM_SECONDS - waited,
+        should_hold, remaining = self._empty_list_guard.evaluate(
+            suspects, time.monotonic(), CONFIRM_SECONDS
         )
-        return True
+        if should_hold:
+            _LOGGER.warning(
+                "A list that still has open snapshot items appears empty; "
+                "holding back and re-checking "
+                "in %d s (accepted if the result stays the same)",
+                remaining,
+            )
+        return should_hold
 
     @staticmethod
     def _pending_key(entity_id: str, key: ItemKey) -> str:
@@ -614,7 +613,7 @@ class TodoSyncer:
         if not self._hold_back(self._empty_list_suspects(items_a, items_b)):
             return False
         self._sync_deferred = True
-        self._schedule(trigger, CONFIRM_SECONDS + 10)
+        self._schedule(trigger, EMPTY_LIST_RECHECK_SECONDS)
         return True
 
     async def _sync_item(
