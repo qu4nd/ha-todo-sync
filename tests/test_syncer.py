@@ -805,8 +805,6 @@ async def test_unready_list_status_clears_when_list_returns(hass, syncer):
     assert syncer.status_attributes["waiting_entity"] is None
     assert syncer.status_attributes["waiting_state"] is None
 
-
-
 @pytest.mark.parametrize(
     ("first", "second", "expected_count"),
     [
