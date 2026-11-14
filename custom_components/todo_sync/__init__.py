@@ -551,98 +551,138 @@ class TodoSyncer:
                 # A third value is a genuine edit/conflict, not a stale provider read.
                 self._pending_writes.pop(pending_id, None)
 
-    async def _sync(self, trigger: str | None) -> bool:
-        self._sync_deferred = False
-        # Read both lists completely before applying anything. A failed read must
-        # never be interpreted as an empty list or advance the persisted snapshot.
+    async def _read_lists(self) -> tuple[list[dict], list[dict]]:
+        """Read both source lists before making any synchronization changes."""
         raw = {}
         for entity_id in (self.a, self.b):
             try:
                 raw[entity_id] = await self._fetch(entity_id)
             except Exception as err:  # noqa: BLE001
                 raise _TodoListReadError(entity_id) from err
+        return raw[self.a], raw[self.b]
+
+    def _prepare_items(
+        self, raw_a: list[dict], raw_b: list[dict]
+    ) -> tuple[dict[str, dict], dict[str, dict]]:
+        """Parse provider data and resolve reads that are stale after our own writes."""
         # Providers without description support encode details after the first
         # word in the title. This deterministic rule keeps identity consistent
         # regardless of which provider supplied the item.
-        items_a = self._parse(self.a, raw[self.a])
-        items_b = self._parse(self.b, raw[self.b])
+        items_a = self._parse(self.a, raw_a)
+        items_b = self._parse(self.b, raw_b)
         self._resolve_pending_writes(items_a, items_b)
+        return items_a, items_b
+
+    def _defer_if_empty_list_is_suspect(
+        self,
+        items_a: dict[str, dict],
+        items_b: dict[str, dict],
+        trigger: str | None,
+    ) -> bool:
+        """Hold back deletions until a transient empty-list result is confirmed."""
+        if not self._hold_back(self._empty_list_suspects(items_a, items_b)):
+            return False
+        self._sync_deferred = True
+        self._schedule(trigger, CONFIRM_SECONDS + 10)
+        return True
+
+    async def _sync_item(
+        self,
+        key: str,
+        items_a: dict[str, dict],
+        items_b: dict[str, dict],
+        snapshot: dict[str, dict],
+        trigger: str | None,
+        new_snapshot: dict[str, dict],
+    ) -> bool:
+        """Resolve and apply one item's three-way diff; return whether its write failed."""
+        a, b, s = items_a.get(key), items_b.get(key), snapshot.get(key)
+        sa, sb, ss = (self._val(x) for x in (a, b, s))
+
+        if sa == sb:
+            if a:
+                new_snapshot[key] = {k: v for k, v in a.items() if k != "uid"}
+            return False
+
+        changed_a, changed_b = sa != ss, sb != ss
+        if changed_a and changed_b:
+            # Both sides changed since the snapshot. Prefer the side that triggered
+            # this run; periodic runs have no trigger and therefore default to A.
+            from_a = trigger != self.b
+        else:
+            from_a = changed_a
+
+        source, dest_id, dest_items = (
+            (a, self.b, items_b) if from_a else (b, self.a, items_a)
+        )
+        dest = dest_items.get(key)
+        _LOGGER.debug(
+            "List item change detected; action=%s destination=%s",
+            "copy" if source else "delete", "A" if dest_id == self.a else "B",
+        )
+        # Completed entries are provider history, not active list content. Avoid
+        # recreating or deleting them on the opposite side when one side omits them.
+        if (source is None and dest and dest["status"] == DONE) or (
+            dest is None and source and source["status"] == DONE
+        ):
+            _LOGGER.debug("Skipped synchronization of completed item history")
+            return False
+        try:
+            previous_destination = dest
+            changed = await self._apply(dest_id, dest_items, key, source)
+            if changed:
+                self._last_synced_items += 1
+                self._track_pending_write(dest_id, key, previous_destination, source)
+        except Exception as err:  # noqa: BLE001
+            # Keep the old baseline for this item so the next run retries it. Other
+            # items can still sync; _run schedules a bounded retry after this pass.
+            destination_side = "A" if dest_id == self.a else "B"
+            _LOGGER.error(
+                "Applying a list item to destination %s failed (%s); will retry",
+                destination_side, type(err).__name__,
+            )
+            if s:
+                new_snapshot[key] = s
+            return True
+
+        if source:
+            # Provider UIDs are local to each list and must not enter the shared snapshot.
+            new_snapshot[key] = {k: v for k, v in source.items() if k != "uid"}
+        return False
+
+    async def _sync(self, trigger: str | None) -> bool:
+        self._sync_deferred = False
+        # Read both lists completely before applying anything. A failed read must
+        # never be interpreted as an empty list or advance the persisted snapshot.
+        raw_a, raw_b = await self._read_lists()
+        items_a, items_b = self._prepare_items(raw_a, raw_b)
+
         # A completely empty list can be a transient provider/API read failure.
         # Do not propagate its deletions until the same result is seen again after
         # the confirmation window.
-        if self._hold_back(self._empty_list_suspects(items_a, items_b)):
-            self._sync_deferred = True
-            self._schedule(trigger, CONFIRM_SECONDS + 10)
+        if self._defer_if_empty_list_is_suspect(items_a, items_b, trigger):
             return False
-        snap = self._snapshot
+
+        snapshot = self._snapshot
         trigger_side = (
             "A" if trigger == self.a else "B" if trigger == self.b else "periodic"
         )
         _LOGGER.debug(
             "Sync started (trigger=%s): list A=%d items, list B=%d items, snapshot=%d",
-            trigger_side, len(items_a), len(items_b), len(snap),
+            trigger_side, len(items_a), len(items_b), len(snapshot),
         )
-        new_snap: dict[str, dict] = {}
+        new_snapshot: dict[str, dict] = {}
         write_failed = False
-        self._last_synced_items = 0
 
         # Three-way diff: compare each side (A/B) with the last synced value (snapshot).
         # This distinguishes a one-sided edit from a conflict where both sides changed.
-        for key in set(items_a) | set(items_b) | set(snap):
-            a, b, s = items_a.get(key), items_b.get(key), snap.get(key)
-            sa, sb, ss = (self._val(x) for x in (a, b, s))
-
-            if sa == sb:
-                if a:
-                    new_snap[key] = {k: v for k, v in a.items() if k != "uid"}
-                continue
-
-            changed_a, changed_b = sa != ss, sb != ss
-            if changed_a and changed_b:
-                # Both sides changed since the snapshot. Prefer the side that triggered
-                # this run; periodic runs have no trigger and therefore default to A.
-                from_a = trigger != self.b
-            else:
-                from_a = changed_a
-
-            source, dest_id, dest_items = (
-                (a, self.b, items_b) if from_a else (b, self.a, items_a)
+        for key in set(items_a) | set(items_b) | set(snapshot):
+            item_write_failed = await self._sync_item(
+                key, items_a, items_b, snapshot, trigger, new_snapshot
             )
-            dest = dest_items.get(key)
-            _LOGGER.debug(
-                "List item change detected; action=%s destination=%s",
-                "copy" if source else "delete", "A" if dest_id == self.a else "B",
-            )
-            # Completed entries are provider history, not active list content. Avoid
-            # recreating or deleting them on the opposite side when one side omits them.
-            if (source is None and dest and dest["status"] == DONE) or (
-                dest is None and source and source["status"] == DONE
-            ):
-                _LOGGER.debug("Skipped synchronization of completed item history")
-                continue
-            try:
-                previous_destination = dest
-                changed = await self._apply(dest_id, dest_items, key, source)
-                if changed:
-                    self._last_synced_items += 1
-                    self._track_pending_write(dest_id, key, previous_destination, source)
-            except Exception as err:  # noqa: BLE001
-                # Keep the old baseline for this item so the next run retries it. Other
-                # items can still sync; _run schedules a bounded retry after this pass.
-                write_failed = True
-                destination_side = "A" if dest_id == self.a else "B"
-                _LOGGER.error(
-                    "Applying a list item to destination %s failed (%s); will retry",
-                    destination_side, type(err).__name__,
-                )
-                if s:
-                    new_snap[key] = s
-                continue
-            if source:
-                # Provider UIDs are local to each list and must not enter the shared snapshot.
-                new_snap[key] = {k: v for k, v in source.items() if k != "uid"}
+            write_failed = item_write_failed or write_failed
 
-        self._snapshot = new_snap
+        self._snapshot = new_snapshot
         # Persist even if unload started during this run: list changes have already been
         # applied, so the stored baseline must match them before a reloaded instance starts.
         await self._save_store()
