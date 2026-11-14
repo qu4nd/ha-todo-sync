@@ -47,6 +47,35 @@ def test_sync_status_round_trips_legacy_storage_and_exposes_compatible_attribute
     }
 
 
+@pytest.mark.parametrize(
+    "field",
+    [
+        "last_success",
+        "last_error",
+        "last_error_type",
+        "waiting_entity",
+        "waiting_state",
+    ],
+)
+def test_sync_status_ignores_non_string_optional_fields(field):
+    status = SyncStatus.from_dict({field: {"unexpected": "value"}})
+
+    assert getattr(status, field) is None
+
+
+@pytest.mark.parametrize("value", [-1, True, "3", 1.5, None])
+def test_sync_status_rejects_invalid_synced_item_counts(value):
+    status = SyncStatus.from_dict({"synced_items": value})
+
+    assert status.synced_items == 0
+
+
+def test_sync_status_preserves_nonnegative_integer_synced_item_count():
+    status = SyncStatus.from_dict({"synced_items": 3})
+
+    assert status.synced_items == 3
+
+
 def test_sync_status_defaults_unknown_legacy_state_to_idle():
     status = SyncStatus.from_dict({"state": "unknown_future_state", "synced_items": "bad"})
 
