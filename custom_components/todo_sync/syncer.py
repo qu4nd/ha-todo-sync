@@ -27,7 +27,6 @@ from .const import (
     DONE,
     OPEN,
     PENDING_WRITE_SECONDS,
-    RETRY_SECONDS,
     SCAN_INTERVAL_MINUTES,
 )
 from .models import ItemKey, TodoItem
@@ -35,6 +34,7 @@ from .policy import (
     CONFIRM_SECONDS,
     EMPTY_LIST_RECHECK_SECONDS,
     MAX_RETRY_SECONDS,
+    RETRY_SECONDS,
     EmptyListGuard,
     calculate_retry_delay,
     select_retry_trigger,
