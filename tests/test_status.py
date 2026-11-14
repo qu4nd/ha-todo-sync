@@ -8,6 +8,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.todo_sync import TodoSyncer, _TodoListReadError, _identity
 from custom_components.todo_sync.const import CONF_LIST_A, CONF_LIST_B
+from custom_components.todo_sync.models import SyncState, SyncStatus
 
 
 @pytest.fixture
@@ -20,6 +21,66 @@ def syncer(hass):
     instance._store.async_save = AsyncMock()
     instance._store.async_delay_save = Mock()
     return instance
+
+
+def test_sync_status_round_trips_legacy_storage_and_exposes_compatible_attributes():
+    stored = {
+        "state": "success",
+        "last_success": "2026-11-14T20:00:00+00:00",
+        "last_error": None,
+        "synced_items": 3,
+        "last_error_type": None,
+        "waiting_entity": None,
+        "waiting_state": None,
+    }
+
+    status = SyncStatus.from_dict(stored)
+
+    assert status == SyncStatus(
+        state=SyncState.SUCCESS,
+        last_success="2026-11-14T20:00:00+00:00",
+        synced_items=3,
+    )
+    assert status.to_dict() == stored
+    assert status.attributes == {
+        key: value for key, value in stored.items() if key != "state"
+    }
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "last_success",
+        "last_error",
+        "last_error_type",
+        "waiting_entity",
+        "waiting_state",
+    ],
+)
+def test_sync_status_ignores_non_string_optional_fields(field):
+    status = SyncStatus.from_dict({field: {"unexpected": "value"}})
+
+    assert getattr(status, field) is None
+
+
+@pytest.mark.parametrize("value", [-1, True, "3", 1.5, None])
+def test_sync_status_rejects_invalid_synced_item_counts(value):
+    status = SyncStatus.from_dict({"synced_items": value})
+
+    assert status.synced_items == 0
+
+
+def test_sync_status_preserves_nonnegative_integer_synced_item_count():
+    status = SyncStatus.from_dict({"synced_items": 3})
+
+    assert status.synced_items == 3
+
+
+def test_sync_status_defaults_unknown_legacy_state_to_idle():
+    status = SyncStatus.from_dict({"state": "unknown_future_state", "synced_items": "bad"})
+
+    assert status.state is SyncState.IDLE
+    assert status.synced_items == 0
 
 
 @pytest.mark.asyncio
@@ -45,7 +106,7 @@ async def test_status_is_persisted_and_notifies_listeners(syncer):
     data_func, delay = syncer._store.async_delay_save.call_args.args
     assert delay == 5
     assert data_func() == {
-        "snapshot": {}, "status": syncer._status, "pending_writes": {}
+        "snapshot": {}, "status": syncer._status.to_dict(), "pending_writes": {}
     }
     syncer._store.async_save.assert_not_awaited()
 

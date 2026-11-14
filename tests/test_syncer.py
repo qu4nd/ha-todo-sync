@@ -382,7 +382,7 @@ async def test_new_item_on_a_is_applied_to_b(syncer):
     assert syncer._snapshot == {_identity("Milch", "3"): source}
     syncer._store.async_save.assert_awaited_once_with({
         "snapshot": {_identity("Milch", "3").storage_key: source},
-        "status": syncer._persisted_status,
+        "status": syncer._persisted_status.to_dict(),
         "pending_writes": {
             syncer._pending_key("todo.b", _identity("Milch", "3")): {
                 "entity_id": "todo.b", "key": _identity("Milch", "3").storage_key,
@@ -855,6 +855,7 @@ async def test_unready_list_is_exposed_in_status(hass, syncer, state, expected_s
         hass.states.async_set("todo.b", state)
     scheduled = []
     syncer._schedule = lambda trigger, delay: scheduled.append((trigger, delay))
+    syncer._fetch = AsyncMock()
 
     await syncer._run(None)
 
@@ -862,6 +863,8 @@ async def test_unready_list_is_exposed_in_status(hass, syncer, state, expected_s
     assert syncer.status_attributes["waiting_entity"] == "todo.b"
     assert syncer.status_attributes["waiting_state"] == expected_state
     assert scheduled == [(None, RETRY_SECONDS)]
+    # Missing/unavailable entity checks use the local HA state machine only.
+    syncer._fetch.assert_not_awaited()
 
 
 @pytest.mark.asyncio

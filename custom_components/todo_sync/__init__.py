@@ -35,7 +35,7 @@ from .const import (
     SCAN_INTERVAL_MINUTES,
     STORAGE_VERSION,
 )
-from .models import ItemKey, TodoItem
+from .models import ItemKey, SyncState, SyncStatus, TodoItem
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -82,17 +82,10 @@ class TodoSyncer:
         self._retry_attempt = 0
         self._last_synced_items = 0
         self._sync_deferred = False
-        self._status = {
-            "state": "idle",
-            "last_success": None,
-            "last_error": None,
-            "synced_items": 0,
-            "last_error_type": None,
-            "waiting_entity": None,
-            "waiting_state": None,
-        }
+        self._status = SyncStatus()
         self._status_listeners = []
-        self._persisted_status = dict(self._status)
+        # Transient states (notably syncing) stay in memory and are not persisted.
+        self._persisted_status = self._status
         self._last_saved_data: dict | None = None
         self._last_scheduled_data: dict | None = None
 
@@ -105,14 +98,11 @@ class TodoSyncer:
             key: value for key, value in self._pending_writes.items()
             if value.get("expires", 0) > now
         }
-        stored_status = (data or {}).get("status", {})
-        self._status.update(
-            {key: stored_status[key] for key in self._status if key in stored_status}
-        )
+        self._status = SyncStatus.from_dict((data or {}).get("status", {}))
         # A process cannot still be syncing after Home Assistant has restarted.
-        if self._status["state"] == "syncing":
-            self._status["state"] = "idle"
-        self._persisted_status = dict(self._status)
+        if self._status.state is SyncState.SYNCING:
+            self._status = self._status.updated(SyncState.IDLE)
+        self._persisted_status = self._status
         self._last_saved_data = copy.deepcopy(data)
         await self._save_store()
         self._unsubs.append(
@@ -129,11 +119,11 @@ class TodoSyncer:
 
     @property
     def status(self) -> str:
-        return self._status["state"]
+        return self._status.state.value
 
     @property
     def status_attributes(self) -> dict:
-        return {key: value for key, value in self._status.items() if key != "state"}
+        return self._status.attributes
 
     @callback
     def async_add_status_listener(self, listener):
@@ -184,7 +174,7 @@ class TodoSyncer:
         }
         return {
             "snapshot": copy.deepcopy(snapshot),
-            "status": dict(self._persisted_status),
+            "status": self._persisted_status.to_dict(),
             "pending_writes": copy.deepcopy(self._pending_writes),
         }
 
@@ -196,11 +186,13 @@ class TodoSyncer:
         await self._store.async_save(data)
         self._last_saved_data = copy.deepcopy(data)
 
-    async def _set_status(self, state: str, *, persist: bool = True, **attributes) -> None:
-        self._status.update(state=state, **attributes)
+    async def _set_status(
+        self, state: SyncState | str, *, persist: bool = True, **attributes
+    ) -> None:
+        self._status = self._status.updated(state, **attributes)
         self._notify_status()
         if persist:
-            self._persisted_status = dict(self._status)
+            self._persisted_status = self._status
             data = self._store_data()
             if data != self._last_saved_data and data != self._last_scheduled_data:
                 self._last_scheduled_data = copy.deepcopy(data)
@@ -264,12 +256,12 @@ class TodoSyncer:
         if unavailable is not None:
             entity_id, entity_state = unavailable
             changed = (
-                self._status["state"] != "waiting"
-                or self._status["waiting_entity"] != entity_id
-                or self._status["waiting_state"] != entity_state
+                self._status.state is not SyncState.WAITING
+                or self._status.waiting_entity != entity_id
+                or self._status.waiting_state != entity_state
             )
             await self._set_status(
-                "waiting",
+                SyncState.WAITING,
                 waiting_entity=entity_id,
                 waiting_state=entity_state,
             )
@@ -286,7 +278,7 @@ class TodoSyncer:
                 return
             self._last_synced_items = 0
             await self._set_status(
-                "syncing",
+                SyncState.SYNCING,
                 persist=False,
                 synced_items=0,
                 waiting_entity=None,
@@ -297,7 +289,7 @@ class TodoSyncer:
             except _TodoListReadError:
                 _LOGGER.error("Could not read a to-do list (TodoListReadError)")
                 await self._set_status(
-                    "error",
+                    SyncState.ERROR,
                     last_error=self._now(),
                     last_error_type="TodoListReadError",
                     synced_items=0,
@@ -306,7 +298,7 @@ class TodoSyncer:
             except Exception as err:  # noqa: BLE001
                 _LOGGER.error("Synchronization failed (%s)", type(err).__name__)
                 await self._set_status(
-                    "error",
+                    SyncState.ERROR,
                     last_error=self._now(),
                     last_error_type=type(err).__name__,
                     synced_items=self._last_synced_items,
@@ -314,7 +306,7 @@ class TodoSyncer:
             else:
                 if write_failed:
                     await self._set_status(
-                        "error",
+                        SyncState.ERROR,
                         last_error=self._now(),
                         last_error_type="WriteError",
                         synced_items=self._last_synced_items,
@@ -322,11 +314,11 @@ class TodoSyncer:
                     self._schedule_retry(trigger, "One or more list updates failed")
                 elif self._sync_deferred:
                     self._retry_attempt = 0
-                    await self._set_status("held_back", synced_items=0)
+                    await self._set_status(SyncState.HELD_BACK, synced_items=0)
                 else:
                     self._retry_attempt = 0
                     await self._set_status(
-                        "success",
+                        SyncState.SUCCESS,
                         last_success=self._now(),
                         synced_items=self._last_synced_items,
                     )
