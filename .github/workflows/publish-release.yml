@@ -83,10 +83,8 @@ jobs:
           fi
           tag="v${version}"
           is_prerelease=false
-          release_args=()
           if [[ "$version" =~ b[1-9][0-9]*$ ]]; then
             is_prerelease=true
-            release_args+=(--prerelease)
           fi
 
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
@@ -149,11 +147,18 @@ jobs:
           path.write_text(notes + "\n", encoding="utf-8")
           PY
 
-            gh release create "$tag" \
-              --target "$MERGE_SHA" \
-              --title "$tag" \
-              --notes-file generated-notes.md \
-              "${release_args[@]}"
+            if [[ "$is_prerelease" == "true" ]]; then
+              gh release create "$tag" \
+                --target "$MERGE_SHA" \
+                --title "$tag" \
+                --notes-file generated-notes.md \
+                --prerelease
+            else
+              gh release create "$tag" \
+                --target "$MERGE_SHA" \
+                --title "$tag" \
+                --notes-file generated-notes.md
+            fi
           fi
 
           # Keep asset publication in this workflow to avoid a tag-triggered race.
