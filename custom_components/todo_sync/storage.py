@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+from collections.abc import Callable
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
@@ -83,16 +84,26 @@ class TodoSyncStorage:
         await self._store.async_save(data)
         self._last_saved_data = copy.deepcopy(data)
 
-    def async_delay_save(self, data: dict, delay: float) -> None:
-        """Schedule the latest changed payload while avoiding duplicate timers."""
+    def async_delay_save(
+        self,
+        data: dict,
+        delay: float,
+        data_func: Callable[[], dict] | None = None,
+    ) -> None:
+        """Schedule a save, optionally resolving the payload when the timer fires."""
         # The callback must always see the latest payload, even when it matches the
         # last saved value and an earlier delayed save is already pending.
         self._scheduled_data = copy.deepcopy(data)
         if data == self._last_saved_data or data == self._last_scheduled_data:
             return
         self._last_scheduled_data = copy.deepcopy(data)
-        self._store.async_delay_save(self._scheduled_payload, delay)
+        self._store.async_delay_save(
+            lambda: self._scheduled_payload(data_func), delay
+        )
 
-    def _scheduled_payload(self) -> dict:
-        """Return the newest scheduled payload when Home Assistant flushes the save."""
-        return copy.deepcopy(self._scheduled_data)
+    def _scheduled_payload(
+        self, data_func: Callable[[], dict] | None = None
+    ) -> dict:
+        """Return current runtime data, or the latest cached payload, at flush time."""
+        data = data_func() if data_func is not None else self._scheduled_data
+        return copy.deepcopy(data)
