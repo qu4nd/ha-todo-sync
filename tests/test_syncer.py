@@ -965,7 +965,7 @@ async def test_sync_does_not_depend_on_provider_item_order(syncer, items_a, item
     assert syncer._snapshot == expected_snapshot
 
 
-def test_parse_rejects_invalid_identity_without_logging_item_content(syncer):
+def test_parse_rejects_invalid_identity_without_exposing_summary(syncer):
     syncer._supports_description = lambda _entity_id: True
 
     with pytest.raises(_InvalidItemIdentityError, match="missing_or_empty_summary"):
@@ -1016,8 +1016,7 @@ async def test_read_failure_logs_category_and_retry_delay_without_entity_id(
     assert "todo.a" not in caplog.text
 
 
-@pytest.mark.asyncio
-async def test_empty_list_guard_emits_structured_activation_log(syncer, caplog):
+def test_empty_list_guard_emits_structured_activation_log(syncer, caplog):
     syncer._snapshot = {_identity("Secret item", ""): item("Secret item")}
     with patch(
         "custom_components.todo_sync.syncer.time.monotonic", return_value=100.0
@@ -1034,12 +1033,11 @@ async def test_empty_list_guard_emits_structured_activation_log(syncer, caplog):
 
 @pytest.mark.asyncio
 async def test_conflict_log_identifies_winner_without_item_content(syncer, caplog):
-    old = item("Secret item")
     key = _identity("Secret item", "")
-    syncer._snapshot = {key: old}
+    syncer._snapshot = {key: item("Secret item", status="completed")}
     syncer._fetch = AsyncMock(
         side_effect=[
-            [{"summary": "Secret item", "status": "completed"}],
+            [],
             [{"summary": "Secret item", "status": "needs_action"}],
         ]
     )
