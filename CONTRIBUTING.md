@@ -59,6 +59,15 @@ A few behaviors are intentional:
 
 Please preserve these safety properties when changing the synchronization flow. Add a regression test whenever a change affects conflict resolution, deletion handling, snapshots, or retries.
 
+## Preparing releases
+
+Releases are prepared manually through the **Prepare release** GitHub Actions workflow on `main`. Choose the release channel and, when starting a new version target, the version component to bump:
+
+- **Stable:** From a stable manifest version, increments the selected component as before. If the manifest currently contains a beta version, it finalizes that same target version without the beta suffix.
+- **Beta:** From a stable manifest version, starts a beta series for the selected next version target. Further beta preparations for that target increment the highest existing beta tag (`b1`, `b2`, and so on); existing tags are never reused. Beta releases are published as GitHub pre-releases so HACS users must explicitly opt in.
+
+The workflow opens a manifest-only release pull request. Existing validation and automatic merge protections apply, after which the publish workflow creates the matching tag and GitHub release and uploads the integration ZIP. There are no nightly builds or automatic beta releases after ordinary merges. A stable release after a beta series uses the same target version without its beta suffix.
+
 ## Making a change
 
 - Keep changes focused and avoid provider-specific behavior unless there is a demonstrated compatibility need.
