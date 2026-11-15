@@ -352,7 +352,9 @@ class TodoSyncer:
             if not isinstance(summary, str) or not summary.strip():
                 raise _InvalidItemIdentityError(entity_id, "missing_or_empty_summary")
             title = summary.strip()
-            description = item.get("description") or ""
+            description = item.get("description")
+            if description is None:
+                description = ""
             if not isinstance(description, str):
                 raise _InvalidItemIdentityError(entity_id, "invalid_description")
             name, desc = title, description.strip()
