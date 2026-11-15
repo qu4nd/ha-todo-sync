@@ -1076,7 +1076,6 @@ async def test_write_failure_log_has_category_without_item_content(syncer, caplo
     assert "Secret item" not in caplog.text
 
 
-
 @pytest.mark.parametrize(
     ("destination_item", "expected_outcome"),
     [
