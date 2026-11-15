@@ -76,7 +76,18 @@ def calculate_release_version(
     if release_type == "stable":
         return stable_version
 
-    beta_numbers = []
+    current_beta_tag = (
+        f"v{format_version(major, minor, patch, current_beta)}"
+        if current_beta is not None
+        else None
+    )
+    if current_beta_tag is not None and current_beta_tag not in tags:
+        raise ValueError(
+            f"Current beta release {current_beta_tag} is not published yet; "
+            "publish it before preparing another beta"
+        )
+
+    beta_numbers = [current_beta] if current_beta is not None else []
     beta_tag_pattern = re.compile(
         rf"^v{re.escape(stable_version)}b([1-9][0-9]*)$"
     )
@@ -128,7 +139,6 @@ def main() -> None:
 
     with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
         output.write(f"new_version={version}\n")
-        output.write(f"is_prerelease={'true' if parse_version(version)[3] is not None else 'false'}\n")
 
     print(f"Prepared {'beta' if 'b' in version else 'stable'} version {version}")
 
