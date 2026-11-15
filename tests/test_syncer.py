@@ -1,5 +1,6 @@
 """Unit tests for the bidirectional synchronization logic."""
 
+import logging
 from itertools import permutations
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -9,7 +10,12 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.todo_sync.const import CONF_LIST_A, CONF_LIST_B
 from custom_components.todo_sync.policy import MAX_RETRY_SECONDS, RETRY_SECONDS
 from custom_components.todo_sync.storage import TodoSyncStorage
-from custom_components.todo_sync.syncer import TodoSyncer, _TodoListReadError, _identity
+from custom_components.todo_sync.syncer import (
+    TodoSyncer,
+    _InvalidItemIdentityError,
+    _TodoListReadError,
+    _identity,
+)
 
 
 @pytest.fixture
@@ -957,3 +963,119 @@ async def test_sync_does_not_depend_on_provider_item_order(syncer, items_a, item
 
     syncer._apply.assert_not_awaited()
     assert syncer._snapshot == expected_snapshot
+
+
+
+def test_parse_rejects_invalid_identity_without_logging_item_content(syncer):
+    syncer._supports_description = lambda _entity_id: True
+
+    with pytest.raises(_InvalidItemIdentityError, match="missing_or_empty_summary"):
+        syncer._parse(
+            "todo.a",
+            [{"summary": "  ", "status": "needs_action"}],
+        )
+
+
+@pytest.mark.asyncio
+async def test_invalid_identity_is_classified_and_logged_without_item_content(
+    syncer, caplog
+):
+    syncer._ready = lambda: True
+    syncer._sync = AsyncMock(
+        side_effect=_InvalidItemIdentityError("todo.a", "missing_or_empty_summary")
+    )
+    syncer._schedule = lambda _trigger, _delay: None
+
+    with caplog.at_level(logging.ERROR, logger="custom_components.todo_sync"):
+        await syncer._run(None)
+
+    assert syncer.status == "error"
+    assert syncer.status_attributes["last_error_type"] == "InvalidItemIdentityError"
+    assert "sync_event=invalid_identity" in caplog.text
+    assert "category=invalid_identity" in caplog.text
+    assert "todo.a" not in caplog.text
+    assert "todo.b" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_read_failure_logs_category_and_retry_delay_without_entity_id(
+    syncer, caplog
+):
+    syncer._ready = lambda: True
+    syncer._sync = AsyncMock(
+        side_effect=_TodoListReadError("todo.a")
+    )
+    syncer._schedule = lambda _trigger, _delay: None
+
+    with caplog.at_level(logging.WARNING, logger="custom_components.todo_sync"):
+        await syncer._run(None)
+
+    assert "sync_event=read_failed" in caplog.text
+    assert "category=read_failure" in caplog.text
+    assert "sync_event=retry_scheduled" in caplog.text
+    assert "delay_seconds=30" in caplog.text
+    assert "todo.a" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_empty_list_guard_emits_structured_activation_log(syncer, caplog):
+    syncer._snapshot = {_identity("Secret item", ""): item("Secret item")}
+    with patch(
+        "custom_components.todo_sync.syncer.time.monotonic", return_value=100.0
+    ):
+        with caplog.at_level(logging.WARNING, logger="custom_components.todo_sync"):
+            assert syncer._hold_back(frozenset({"todo.a"})) is True
+
+    assert "sync_event=empty_list_guard" in caplog.text
+    assert "category=empty_list_guard" in caplog.text
+    assert "action=hold" in caplog.text
+    assert "Secret item" not in caplog.text
+    assert "todo.a" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_conflict_log_identifies_winner_without_item_content(syncer, caplog):
+    old = item("Secret item")
+    changed_a = item("Secret item", status="completed")
+    changed_b = item("Secret item")
+    key = _identity("Secret item", "")
+    syncer._snapshot = {key: old}
+    syncer._fetch = AsyncMock(
+        side_effect=[
+            [{"summary": "Secret item", "status": "completed"}],
+            [{"summary": "Secret item", "status": "needs_action"}],
+        ]
+    )
+    syncer._supports_description = lambda _entity_id: True
+    syncer._apply = AsyncMock()
+
+    with caplog.at_level(logging.DEBUG, logger="custom_components.todo_sync"):
+        await syncer._sync("todo.a")
+
+    assert "sync_event=conflict_resolved winner=A destination=B" in caplog.text
+    assert "Secret item" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_write_failure_log_has_category_without_item_content(syncer, caplog):
+    key = _identity("Secret item", "")
+    source = item("Secret item", status="completed")
+    destination = item("Secret item")
+    syncer._supports_description = lambda _entity_id: True
+    syncer._apply = AsyncMock(side_effect=RuntimeError("Secret item provider failure"))
+
+    with caplog.at_level(logging.ERROR, logger="custom_components.todo_sync"):
+        failed = await syncer._sync_item(
+            key,
+            {key: source},
+            {key: destination},
+            {key: destination},
+            "todo.a",
+            {},
+        )
+
+    assert failed is True
+    assert "sync_event=write_failed" in caplog.text
+    assert "category=write_failure" in caplog.text
+    assert "destination=B" in caplog.text
+    assert "Secret item" not in caplog.text
