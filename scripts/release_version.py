@@ -10,8 +10,8 @@ from collections.abc import Iterable
 from pathlib import Path
 
 VERSION_PATTERN = re.compile(
-    r"^(?P<major>0|[1-9][0-9]*)\\."
-    r"(?P<minor>0|[1-9][0-9]*)\\."
+    r"^(?P<major>0|[1-9][0-9]*)\."
+    r"(?P<minor>0|[1-9][0-9]*)\."
     r"(?P<patch>0|[1-9][0-9]*)"
     r"(?:b(?P<beta>[1-9][0-9]*))?$"
 )
@@ -113,12 +113,10 @@ def main() -> None:
     except (KeyError, ValueError) as error:
         raise SystemExit(str(error)) from error
 
-    updated_manifest = dict(manifest)
-    updated_manifest["version"] = version
     # Keep the existing manifest formatting and key order intact.
     updated_text = re.sub(
-        r'(?m)^([ \\t]*"version"[ \\t]*:[ \\t]*")[^"]+(")',
-        rf"\\g<1>{version}\\g<2>",
+        r'(?m)^([ \t]*"version"[ \t]*:[ \t]*")[^"]+(")',
+        rf"\g<1>{version}\g<2>",
         manifest_text,
         count=1,
     )
@@ -129,8 +127,8 @@ def main() -> None:
     MANIFEST_PATH.write_text(updated_text, encoding="utf-8")
 
     with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
-        output.write(f"new_version={version}\\n")
-        output.write(f"is_prerelease={'true' if version.endswith(tuple('0123456789')) and 'b' in version else 'false'}\\n")
+        output.write(f"new_version={version}\n")
+        output.write(f"is_prerelease={'true' if parse_version(version)[3] is not None else 'false'}\n")
 
     print(f"Prepared {'beta' if 'b' in version else 'stable'} version {version}")
 
