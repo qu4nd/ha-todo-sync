@@ -73,6 +73,10 @@ Lists like **Bring!** store the item name and its details separately, whereas **
 2. Add `https://github.com/qu4nd/ha-todo-sync` with category **Integration**.
 3. Install **To-do Sync** and restart Home Assistant.
 
+### Optional beta releases
+
+Stable releases are installed by default. If you want to help test upcoming changes, enable pre-release versions for this repository in HACS. Beta releases are published deliberately for selected changes (for example, `0.1.31b1` and `0.1.31b2`); they are not generated automatically after every merge. Users who do not opt in continue receiving stable releases only. A stable release following a beta series uses the same target version without the beta suffix (for example, `0.1.31`).
+
 ### Option 2: Manual Installation
 
 Copy the `custom_components/todo_sync` folder into your Home Assistant `<config>/custom_components/todo_sync` directory and restart Home Assistant.

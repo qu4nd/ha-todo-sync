@@ -74,8 +74,18 @@ jobs:
           INPUT_VERSION: ${{ inputs.version }}
           REPOSITORY: ${{ github.repository }}
         run: |
+          set -euo pipefail
+
           version="$(python -c 'import json; print(json.load(open("custom_components/todo_sync/manifest.json", encoding="utf-8"))["version"])')"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(b[1-9][0-9]*)?$ ]]; then
+            echo "Unsupported manifest version: $version"
+            exit 1
+          fi
           tag="v${version}"
+          is_prerelease=false
+          if [[ "$version" =~ b[1-9][0-9]*$ ]]; then
+            is_prerelease=true
+          fi
 
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             expected_branch="automation/release-${tag}"
@@ -97,7 +107,12 @@ jobs:
           fi
 
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release $tag already exists; will ensure the integration ZIP is attached."
+            actual_prerelease="$(gh release view "$tag" --json isPrerelease --jq .isPrerelease)"
+            if [[ "$actual_prerelease" != "$is_prerelease" ]]; then
+              echo "Release $tag exists with prerelease=$actual_prerelease; expected $is_prerelease."
+              exit 1
+            fi
+            echo "Release $tag already exists with the expected channel; will ensure the integration ZIP is attached."
           else
             # Generate notes explicitly, then validate them before publishing.
             gh api --method POST "repos/${REPOSITORY}/releases/generate-notes" \
@@ -132,10 +147,18 @@ jobs:
           path.write_text(notes + "\n", encoding="utf-8")
           PY
 
-            gh release create "$tag" \
-              --target "$MERGE_SHA" \
-              --title "$tag" \
-              --notes-file generated-notes.md
+            if [[ "$is_prerelease" == "true" ]]; then
+              gh release create "$tag" \
+                --target "$MERGE_SHA" \
+                --title "$tag" \
+                --notes-file generated-notes.md \
+                --prerelease
+            else
+              gh release create "$tag" \
+                --target "$MERGE_SHA" \
+                --title "$tag" \
+                --notes-file generated-notes.md
+            fi
           fi
 
           # Keep asset publication in this workflow to avoid a tag-triggered race.

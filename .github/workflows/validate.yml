@@ -177,7 +177,7 @@ jobs:
           if [[ "$author_type" != "Bot" ||
                 "$base_branch" != "main" ||
                 "$head_repo" != "$REPOSITORY" ||
-                ! "$head_branch" =~ ^automation/release-v[0-9]+\.[0-9]+\.[0-9]+$ ||
+                ! "$head_branch" =~ ^automation/release-v[0-9]+\.[0-9]+\.[0-9]+(b[1-9][0-9]*)?$ ||
                 "$pr_head_sha" != "$HEAD_SHA" ||
                 "$is_draft" == "true" ||
                 "$merged" == "true" ]]; then
