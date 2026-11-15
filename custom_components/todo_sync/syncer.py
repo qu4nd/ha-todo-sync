@@ -508,13 +508,18 @@ class TodoSyncer:
 
     def _hold_back(self, suspects: frozenset) -> bool:
         """True while an empty-list result is not yet confirmed."""
+        previous_suspect = self._empty_list_guard.suspect
+        is_new_suspect = (
+            bool(suspects)
+            and (
+                previous_suspect is None
+                or previous_suspect[0] != suspects
+            )
+        )
         should_hold, remaining = self._empty_list_guard.evaluate(
             suspects, time.monotonic(), CONFIRM_SECONDS
         )
-        if should_hold and (
-            self._empty_list_guard.suspect is not None
-            and self._empty_list_guard.suspect[1] == time.monotonic()
-        ):
+        if should_hold and is_new_suspect:
             _LOGGER.warning(
                 "sync_event=empty_list_guard category=empty_list_guard "
                 "action=hold suspect_lists=%d remaining_seconds=%d",
