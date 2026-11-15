@@ -98,7 +98,6 @@ class TodoSyncer:
         if self._status.state is SyncState.SYNCING:
             self._status = self._status.updated(SyncState.IDLE)
         self._persisted_status = self._status
-        self._store.set_loaded_data(data)
         await self._save_store()
         self._unsubs.append(
             async_track_state_change_event(self.hass, [self.a, self.b], self._on_change)
