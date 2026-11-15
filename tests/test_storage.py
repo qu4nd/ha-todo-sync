@@ -39,6 +39,22 @@ def test_delayed_save_callback_returns_latest_payload():
     assert storage._store.async_delay_save.call_count == 2
 
 
+def test_delayed_save_callback_reads_live_payload_at_execution_time():
+    storage = TodoSyncStorage.__new__(TodoSyncStorage)
+    storage._store = Mock()
+    storage._store.async_delay_save = Mock()
+    storage._last_saved_data = {"state": "old"}
+    storage._last_scheduled_data = None
+    storage._scheduled_data = None
+    runtime_data = {"state": "scheduled"}
+
+    storage.async_delay_save(runtime_data, 5, lambda: runtime_data)
+    callback = storage._store.async_delay_save.call_args.args[0]
+    runtime_data["state"] = "changed-during-sync"
+
+    assert callback() == {"state": "changed-during-sync"}
+
+
 def test_storage_serialization_preserves_existing_snapshot_key_format():
     key = ItemKey("Milk", "3")
     snapshot = {
