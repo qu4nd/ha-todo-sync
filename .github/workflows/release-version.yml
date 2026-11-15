@@ -67,7 +67,7 @@ jobs:
           body="$(cat <<EOF
           ## Release preparation
 
-          - Bump `custom_components/todo_sync/manifest.json` to **${VERSION}**
+          - Bump custom_components/todo_sync/manifest.json to **${VERSION}**
           - Release channel: **${RELEASE_TYPE}**
           - No functional code changes
 
