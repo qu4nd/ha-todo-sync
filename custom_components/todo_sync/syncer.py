@@ -150,7 +150,7 @@ class TodoSyncer:
         self._notify_status()
         if persist:
             self._persisted_status = self._status
-            self._store.async_delay_save(self._store_data(), 5)
+            self._store.async_delay_save(self._store_data(), 5, self._store_data)
 
     @staticmethod
     def _now() -> str:
