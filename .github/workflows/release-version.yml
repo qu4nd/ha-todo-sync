@@ -3,8 +3,16 @@ name: Prepare release
 on:
   workflow_dispatch:
     inputs:
+      release_type:
+        description: Release channel to prepare
+        required: true
+        type: choice
+        options:
+          - stable
+          - beta
+        default: stable
       bump:
-        description: Version component to increase
+        description: Version component to increase (used for a new release target)
         required: true
         type: choice
         options:
@@ -24,53 +32,18 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Bump manifest version
+      - name: Fetch release tags
+        run: git fetch --tags --force
+
+      - name: Calculate and write release version
         id: version
         env:
+          RELEASE_TYPE: ${{ inputs.release_type }}
           BUMP: ${{ inputs.bump }}
-        run: |
-          python - <<'PY'
-          import json
-          import os
-          import re
-          from pathlib import Path
-
-          path = Path("custom_components/todo_sync/manifest.json")
-          content = path.read_text(encoding="utf-8")
-          match = re.search(
-              r'(?m)^([ \t]*"version"[ \t]*:[ \t]*")([0-9]+)\.([0-9]+)\.([0-9]+)(")',
-              content,
-          )
-          if not match:
-              raise SystemExit("Could not find a semantic version in manifest.json")
-
-          major, minor, patch = map(int, match.group(2, 3, 4))
-          bump = os.environ["BUMP"]
-          if bump == "major":
-              major, minor, patch = major + 1, 0, 0
-          elif bump == "minor":
-              minor, patch = minor + 1, 0
-          elif bump == "patch":
-              patch += 1
-          else:
-              raise SystemExit(f"Unsupported version bump: {bump}")
-
-          version = f"{major}.{minor}.{patch}"
-          updated = (
-              content[:match.start()]
-              + match.group(1)
-              + version
-              + match.group(5)
-              + content[match.end():]
-          )
-          json.loads(updated)
-          path.write_text(updated, encoding="utf-8")
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"new_version={version}\n")
-          print(f"Prepared version {version}")
-          PY
+        run: python scripts/release_version.py
 
       - name: Create GitHub App installation token
         id: app-token
@@ -87,13 +60,15 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ steps.version.outputs.new_version }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
         run: |
           branch="automation/release-v${VERSION}"
-          title="chore: prepare release v${VERSION}"
+          title="chore: prepare ${RELEASE_TYPE} release v${VERSION}"
           body="$(cat <<EOF
           ## Release preparation
 
           - Bump `custom_components/todo_sync/manifest.json` to **${VERSION}**
+          - Release channel: **${RELEASE_TYPE}**
           - No functional code changes
 
           Once all required validation checks pass, this PR is merged automatically.
