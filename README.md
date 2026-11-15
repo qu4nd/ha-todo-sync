@@ -103,7 +103,7 @@ To-do Sync creates a diagnostic sensor for each configured list pair. The sensor
 | `waiting` | One of the configured to-do entities is missing or currently `unknown`/`unavailable`; synchronization is paused until it becomes available. |
 | `held_back` | A completely empty list is being verified against the last snapshot; no list changes are applied during this hold. |
 | `success` | The latest run completed successfully. |
-| `error` | The latest run encountered a read or write error. |
+| `error` | The latest run encountered a read failure, write failure, invalid provider item data, or another unexpected error. |
 
 Automations that evaluate the sensor state should account for the additional `waiting` and `held_back` states. The sensor also exposes these attributes:
 
