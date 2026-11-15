@@ -54,6 +54,15 @@ class _TodoListReadError(Exception):
     """Raised when fetching either source list fails before sync changes are applied."""
 
 
+class _InvalidItemIdentityError(ValueError):
+    """Raised when provider data cannot produce a safe, stable item identity."""
+
+    def __init__(self, entity_id: str, reason: str) -> None:
+        super().__init__(reason)
+        self.entity_id = entity_id
+        self.reason = reason
+
+
 class TodoSyncer:
     """Syncs two lists using a snapshot of the last synced state for diffing."""
 
@@ -198,6 +207,10 @@ class TodoSyncer:
                 return entity_id, state.state
         return None
 
+    def _list_side(self, entity_id: str) -> str:
+        """Return a stable, privacy-safe label for one configured list."""
+        return "A" if entity_id == self.a else "B"
+
     def _ready(self) -> bool:
         return self._unavailable_entity() is None
 
@@ -221,10 +234,16 @@ class TodoSyncer:
             )
             if changed:
                 _LOGGER.warning(
-                    "To-do list %s is not ready (state=%s); synchronization is paused",
-                    entity_id,
+                    "sync_event=list_unavailable category=list_unavailable "
+                    "list=%s state=%s action=pause",
+                    self._list_side(entity_id),
                     entity_state,
                 )
+            _LOGGER.debug(
+                "sync_event=retry_scheduled category=list_unavailable "
+                "delay_seconds=%d",
+                RETRY_SECONDS,
+            )
             self._schedule(trigger, RETRY_SECONDS)
             return
         async with self._lock:
@@ -240,17 +259,38 @@ class TodoSyncer:
             )
             try:
                 write_failed = await self._sync(trigger)
-            except _TodoListReadError:
-                _LOGGER.error("Could not read a to-do list (TodoListReadError)")
+            except _TodoListReadError as err:
+                cause_type = type(err.__cause__).__name__ if err.__cause__ else "UnknownError"
+                _LOGGER.error(
+                    "sync_event=read_failed category=read_failure list=%s error=%s",
+                    self._list_side(err.args[0]) if err.args else "unknown",
+                    cause_type,
+                )
                 await self._set_status(
                     SyncState.ERROR,
                     last_error=self._now(),
                     last_error_type="TodoListReadError",
                     synced_items=0,
                 )
-                self._schedule_retry(trigger, "Could not read a to-do list")
+                self._schedule_retry(trigger, "read_failure")
+            except _InvalidItemIdentityError as err:
+                _LOGGER.error(
+                    "sync_event=invalid_identity category=invalid_identity "
+                    "list=%s reason=%s",
+                    self._list_side(err.entity_id),
+                    err.reason,
+                )
+                await self._set_status(
+                    SyncState.ERROR,
+                    last_error=self._now(),
+                    last_error_type="InvalidItemIdentityError",
+                    synced_items=0,
+                )
             except Exception as err:  # noqa: BLE001
-                _LOGGER.error("Synchronization failed (%s)", type(err).__name__)
+                _LOGGER.error(
+                    "sync_event=sync_failed category=unexpected error=%s",
+                    type(err).__name__,
+                )
                 await self._set_status(
                     SyncState.ERROR,
                     last_error=self._now(),
@@ -265,7 +305,7 @@ class TodoSyncer:
                         last_error_type="WriteError",
                         synced_items=self._last_synced_items,
                     )
-                    self._schedule_retry(trigger, "One or more list updates failed")
+                    self._schedule_retry(trigger, "write_failure")
                 elif self._sync_deferred:
                     self._retry_attempt = 0
                     await self._set_status(SyncState.HELD_BACK, synced_items=0)
@@ -277,13 +317,18 @@ class TodoSyncer:
                         synced_items=self._last_synced_items,
                     )
 
-    def _schedule_retry(self, trigger: str | None, reason: str) -> None:
+    def _schedule_retry(self, trigger: str | None, category: str) -> None:
         """Schedule a bounded retry while preserving the most recent change trigger."""
         self._retry_attempt += 1
         delay = calculate_retry_delay(
             self._retry_attempt, RETRY_SECONDS, MAX_RETRY_SECONDS
         )
-        _LOGGER.warning("%s; retrying in %s seconds", reason, delay)
+        _LOGGER.warning(
+            "sync_event=retry_scheduled category=%s attempt=%d delay_seconds=%d",
+            category,
+            self._retry_attempt,
+            delay,
+        )
         retry_trigger = select_retry_trigger(self._pending_trigger, trigger)
         self._schedule(retry_trigger, delay)
 
@@ -301,8 +346,16 @@ class TodoSyncer:
         items: dict[ItemKey, TodoItem] = {}
         supports = self._supports_description(entity_id)
         for item in raw:
-            title = item["summary"].strip()
-            name, desc = title, (item.get("description") or "").strip()
+            if not isinstance(item, dict):
+                raise _InvalidItemIdentityError(entity_id, "invalid_item_record")
+            summary = item.get("summary")
+            if not isinstance(summary, str) or not summary.strip():
+                raise _InvalidItemIdentityError(entity_id, "missing_or_empty_summary")
+            title = summary.strip()
+            description = item.get("description") or ""
+            if not isinstance(description, str):
+                raise _InvalidItemIdentityError(entity_id, "invalid_description")
+            name, desc = title, description.strip()
             if not supports:
                 name, desc = self._split_title(title)
             if name:
@@ -458,11 +511,14 @@ class TodoSyncer:
         should_hold, remaining = self._empty_list_guard.evaluate(
             suspects, time.monotonic(), CONFIRM_SECONDS
         )
-        if should_hold:
+        if should_hold and (
+            self._empty_list_guard.suspect is not None
+            and self._empty_list_guard.suspect[1] == time.monotonic()
+        ):
             _LOGGER.warning(
-                "A list that still has open snapshot items appears empty; "
-                "holding back and re-checking "
-                "in %d s (accepted if the result stays the same)",
+                "sync_event=empty_list_guard category=empty_list_guard "
+                "action=hold suspect_lists=%d remaining_seconds=%d",
+                len(suspects),
                 remaining,
             )
         return should_hold
@@ -507,6 +563,10 @@ class TodoSyncer:
         for pending_id, pending in list(self._pending_writes.items()):
             if pending.get("expires", 0) <= now:
                 self._pending_writes.pop(pending_id, None)
+                _LOGGER.debug(
+                    "sync_event=pending_write_resolved outcome=expired list=%s",
+                    self._list_side(pending.get("entity_id", self.a)),
+                )
                 continue
             entity_id = pending["entity_id"]
             key = ItemKey.from_storage_key(pending["key"])
@@ -519,14 +579,22 @@ class TodoSyncer:
             expected = pending["expected"]
             if current == expected:
                 self._pending_writes.pop(pending_id, None)
+                outcome = "acknowledged"
             elif current == pending["before"] and source_value == expected:
                 if pending["item"] is None:
                     destination.pop(key, None)
                 else:
                     destination[key] = dict(pending["item"])
+                outcome = "stale_read_masked"
             else:
                 # A third value is a genuine edit/conflict, not a stale provider read.
                 self._pending_writes.pop(pending_id, None)
+                outcome = "conflict"
+            _LOGGER.debug(
+                "sync_event=pending_write_resolved outcome=%s list=%s",
+                outcome,
+                self._list_side(entity_id),
+            )
 
     async def _read_lists(self) -> tuple[list[dict], list[dict]]:
         """Read both source lists before making any synchronization changes."""
@@ -594,16 +662,31 @@ class TodoSyncer:
             (a, self.b, items_b) if from_a else (b, self.a, items_a)
         )
         dest = dest_items.get(key)
+        source_side = "A" if from_a else "B"
+        destination_side = self._list_side(dest_id)
         _LOGGER.debug(
-            "List item change detected; action=%s destination=%s",
-            "copy" if source else "delete", "A" if dest_id == self.a else "B",
+            "sync_event=item_change action=%s source=%s destination=%s",
+            "copy" if source else "delete",
+            source_side,
+            destination_side,
         )
+        if changed_a and changed_b:
+            _LOGGER.debug(
+                "sync_event=conflict_resolved winner=%s destination=%s "
+                "reason=both_lists_changed",
+                source_side,
+                destination_side,
+            )
         # Completed entries are provider history, not active list content. Avoid
         # recreating or deleting them on the opposite side when one side omits them.
         if (source is None and dest and dest["status"] == DONE) or (
             dest is None and source and source["status"] == DONE
         ):
-            _LOGGER.debug("Skipped synchronization of completed item history")
+            _LOGGER.debug(
+                "sync_event=completed_history_skipped source=%s destination=%s",
+                source_side,
+                destination_side,
+            )
             return False
         try:
             previous_destination = dest
@@ -616,8 +699,10 @@ class TodoSyncer:
             # items can still sync; _run schedules a bounded retry after this pass.
             destination_side = "A" if dest_id == self.a else "B"
             _LOGGER.error(
-                "Applying a list item to destination %s failed (%s); will retry",
-                destination_side, type(err).__name__,
+                "sync_event=write_failed category=write_failure "
+                "destination=%s error=%s",
+                destination_side,
+                type(err).__name__,
             )
             if s:
                 new_snapshot[key] = s
@@ -647,8 +732,12 @@ class TodoSyncer:
             "A" if trigger == self.a else "B" if trigger == self.b else "periodic"
         )
         _LOGGER.debug(
-            "Sync started (trigger=%s): list A=%d items, list B=%d items, snapshot=%d",
-            trigger_side, len(items_a), len(items_b), len(snapshot),
+            "sync_event=run_started trigger=%s list_a_items=%d "
+            "list_b_items=%d snapshot_items=%d",
+            trigger_side,
+            len(items_a),
+            len(items_b),
+            len(snapshot),
         )
         new_snapshot: dict[ItemKey, TodoItem] = {}
         write_failed = False
