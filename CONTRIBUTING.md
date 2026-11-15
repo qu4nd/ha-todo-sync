@@ -19,24 +19,30 @@ The project tests run with Python 3.13 and Home Assistant's custom-component tes
 
    On Windows, activate the environment with `.venv\\Scripts\\activate`.
 
-4. Run the test suite from the repository root:
+4. Run the lint checks and test suite from the repository root:
 
    ```bash
+   ruff check .
    PYTHONPATH=. pytest -q
    ```
 
-The GitHub Actions validation workflow installs the test and lint dependencies with `uv`, runs `ruff check .`, runs `pytest -q`, and performs Home Assistant's hassfest validation. HACS validation runs when repository or integration metadata changes (and on pushes to `main`, scheduled runs, and manual runs).
+The GitHub Actions validation workflow runs the same Ruff and pytest checks, followed by Home Assistant's hassfest validation. HACS validation runs when repository or integration metadata changes (and on pushes to `main`, scheduled runs, and manual runs).
 
 ## Project structure
 
-- `custom_components/todo_sync/__init__.py`: synchronization engine, lifecycle, event handling, snapshot storage, conflict resolution and retries.
+- `custom_components/todo_sync/__init__.py`: Home Assistant integration entry points and config-entry setup, reload and unload lifecycle.
+- `custom_components/todo_sync/syncer.py`: runtime coordination and the synchronization workflow, including provider reads and writes, event handling and conflict resolution.
+- `custom_components/todo_sync/models.py`: typed to-do item models and normalized item identity.
+- `custom_components/todo_sync/status.py`: synchronization state and status model.
+- `custom_components/todo_sync/storage.py`: persisted synchronization data, snapshots, serialization and storage migration.
+- `custom_components/todo_sync/policy.py`: retry scheduling and empty-list confirmation decisions.
+- `custom_components/todo_sync/const.py`: integration domain, configuration keys and shared constants.
 - `custom_components/todo_sync/config_flow.py`: initial list selection and periodic interval options.
 - `custom_components/todo_sync/button.py`: the per-configuration **Sync now** button.
 - `custom_components/todo_sync/sensor.py`: the per-configuration diagnostic synchronization-status sensor.
-- `custom_components/todo_sync/const.py`: integration domain, configuration keys and shared constants.
 - `custom_components/todo_sync/manifest.json`: Home Assistant and HACS integration metadata.
 - `custom_components/todo_sync/translations/`: English and German UI strings.
-- `tests/`: automated tests for synchronization behavior.
+- `tests/`: automated tests for synchronization scenarios, integration lifecycle, item models, status, storage and synchronization policies.
 
 ## Synchronization model
 
@@ -60,6 +66,6 @@ Please preserve these safety properties when changing the synchronization flow. 
 - Update the English and German translations together when changing user-facing configuration strings.
 - Update the README when user-visible behavior, setup steps, limitations, or examples change.
 - Add or adjust tests for behavior changes. Do not weaken an assertion merely to make a failing test pass; first verify that the test exercises the intended code path.
-- Run `PYTHONPATH=. pytest -q` before opening a pull request.
+- Run `ruff check .` and `PYTHONPATH=. pytest -q` before opening a pull request.
 
 Contributions are welcome through pull requests. Please use a pull request to propose any change; direct commits to the project are not part of the contribution workflow. Each pull request should address one focused change, explain the motivation and user-visible impact, and describe the tests or validations performed. If a change is based on provider-specific behavior, include the provider and a reproducible description. Submitting a pull request does not guarantee that it will be accepted or merged.
