@@ -51,7 +51,7 @@ jobs:
           expected="custom_components/todo_sync/manifest.json"
           if [[ "$files" != "$expected" ]]; then
             echo "Unexpected files in automated release PR:"
-            printf '%s\n' "$files"
+            printf '%s\\n' "$files"
             exit 1
           fi
 
@@ -74,8 +74,20 @@ jobs:
           INPUT_VERSION: ${{ inputs.version }}
           REPOSITORY: ${{ github.repository }}
         run: |
+          set -euo pipefail
+
           version="$(python -c 'import json; print(json.load(open("custom_components/todo_sync/manifest.json", encoding="utf-8"))["version"])')"
+          if [[ ! "$version" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+(b[1-9][0-9]*)?$ ]]; then
+            echo "Unsupported manifest version: $version"
+            exit 1
+          fi
           tag="v${version}"
+          is_prerelease=false
+          release_args=()
+          if [[ "$version" =~ b[1-9][0-9]*$ ]]; then
+            is_prerelease=true
+            release_args+=(--prerelease)
+          fi
 
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             expected_branch="automation/release-${tag}"
@@ -97,12 +109,17 @@ jobs:
           fi
 
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release $tag already exists; will ensure the integration ZIP is attached."
+            actual_prerelease="$(gh release view "$tag" --json isPrerelease --jq .isPrerelease)"
+            if [[ "$actual_prerelease" != "$is_prerelease" ]]; then
+              echo "Release $tag exists with prerelease=$actual_prerelease; expected $is_prerelease."
+              exit 1
+            fi
+            echo "Release $tag already exists with the expected channel; will ensure the integration ZIP is attached."
           else
             # Generate notes explicitly, then validate them before publishing.
-            gh api --method POST "repos/${REPOSITORY}/releases/generate-notes" \
-              -f tag_name="$tag" \
-              -f target_commitish="$MERGE_SHA" \
+            gh api --method POST "repos/${REPOSITORY}/releases/generate-notes" \\
+              -f tag_name="$tag" \\
+              -f target_commitish="$MERGE_SHA" \\
               --jq .body > generated-notes.md
 
             python - <<'PY'
@@ -117,7 +134,7 @@ jobs:
               midpoint = len(lines) // 2
               if lines[:midpoint] == lines[midpoint:]:
                   lines = lines[:midpoint]
-                  notes = "\n".join(lines).strip()
+                  notes = "\\n".join(lines).strip()
                   print("Removed an identical duplicated release-notes block.")
 
           if not notes:
@@ -129,13 +146,14 @@ jobs:
                   "refusing to publish potentially duplicated notes."
               )
 
-          path.write_text(notes + "\n", encoding="utf-8")
+          path.write_text(notes + "\\n", encoding="utf-8")
           PY
 
-            gh release create "$tag" \
-              --target "$MERGE_SHA" \
-              --title "$tag" \
-              --notes-file generated-notes.md
+            gh release create "$tag" \\
+              --target "$MERGE_SHA" \\
+              --title "$tag" \\
+              --notes-file generated-notes.md \\
+              "${release_args[@]}"
           fi
 
           # Keep asset publication in this workflow to avoid a tag-triggered race.
