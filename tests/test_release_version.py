@@ -51,6 +51,11 @@ def test_stable_release_finalizes_current_beta_target():
     )
 
 
+def test_unpublished_current_beta_blocks_next_beta():
+    with pytest.raises(ValueError, match="not published yet"):
+        calculate_release_version("0.1.31b1", "beta", "patch")
+
+
 def test_beta_release_from_beta_manifest_keeps_same_target():
     assert (
         calculate_release_version(
