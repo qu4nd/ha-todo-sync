@@ -965,7 +965,6 @@ async def test_sync_does_not_depend_on_provider_item_order(syncer, items_a, item
     assert syncer._snapshot == expected_snapshot
 
 
-
 def test_parse_rejects_invalid_identity_without_logging_item_content(syncer):
     syncer._supports_description = lambda _entity_id: True
 
@@ -1036,8 +1035,6 @@ async def test_empty_list_guard_emits_structured_activation_log(syncer, caplog):
 @pytest.mark.asyncio
 async def test_conflict_log_identifies_winner_without_item_content(syncer, caplog):
     old = item("Secret item")
-    changed_a = item("Secret item", status="completed")
-    changed_b = item("Secret item")
     key = _identity("Secret item", "")
     syncer._snapshot = {key: old}
     syncer._fetch = AsyncMock(
@@ -1078,4 +1075,31 @@ async def test_write_failure_log_has_category_without_item_content(syncer, caplo
     assert "sync_event=write_failed" in caplog.text
     assert "category=write_failure" in caplog.text
     assert "destination=B" in caplog.text
+    assert "Secret item" not in caplog.text
+
+
+
+@pytest.mark.parametrize(
+    ("destination_item", "expected_outcome"),
+    [
+        (item("Secret item", status="completed"), "acknowledged"),
+        (item("Secret item"), "stale_read_masked"),
+        (item("Secret item", description="changed"), "conflict"),
+    ],
+)
+def test_pending_write_resolution_logs_outcome_without_item_content(
+    syncer, caplog, destination_item, expected_outcome
+):
+    key = _identity("Secret item", "")
+    before = item("Secret item")
+    expected = item("Secret item", status="completed")
+    syncer._track_pending_write("todo.b", key, before, expected)
+    items_a = {key: expected}
+    items_b = {key: destination_item}
+
+    with caplog.at_level(logging.DEBUG, logger="custom_components.todo_sync"):
+        syncer._resolve_pending_writes(items_a, items_b)
+
+    assert f"outcome={expected_outcome}" in caplog.text
+    assert "sync_event=pending_write_resolved" in caplog.text
     assert "Secret item" not in caplog.text
