@@ -1263,3 +1263,53 @@ async def test_duplicate_cleanup_preflights_both_lists_before_writing(syncer):
         await syncer._sync("todo.a")
 
     syncer._call.assert_not_awaited()
+
+
+
+@pytest.mark.asyncio
+async def test_duplicate_cleanup_does_not_sync_completion_but_later_real_completion_does(syncer):
+    syncer.remove_duplicates = True
+    syncer._supports_description = lambda _entity_id: True
+    duplicate_a = [
+        {"summary": "Salz", "description": "", "status": "needs_action", "uid": "keep"},
+        {"summary": "Salz", "description": "", "status": "needs_action", "uid": "duplicate"},
+    ]
+    cleaned_a = [
+        duplicate_a[0],
+        {**duplicate_a[1], "status": "completed"},
+    ]
+    completed_a = [
+        {**duplicate_a[0], "status": "completed"},
+        {**duplicate_a[1], "status": "completed"},
+    ]
+    open_b = [
+        {"summary": "Salz", "description": "", "status": "needs_action", "uid": "bring"}
+    ]
+    syncer._fetch = AsyncMock(side_effect=[
+        duplicate_a, open_b, cleaned_a,  # First run: cleanup only.
+        cleaned_a, open_b,               # Second run: stable, no sync write.
+        completed_a, open_b,             # Third run: user completes the remaining item.
+    ])
+    syncer._call = AsyncMock()
+    syncer._apply = AsyncMock()
+
+    await syncer._sync("todo.a")
+
+    syncer._call.assert_awaited_once_with(
+        "update_item",
+        {"entity_id": "todo.a", "item": "duplicate", "status": "completed"},
+    )
+    syncer._apply.assert_not_awaited()
+    assert syncer._snapshot[_identity("Salz", "")]["status"] == "needs_action"
+
+    await syncer._sync("todo.a")
+
+    syncer._apply.assert_not_awaited()
+    assert syncer._snapshot[_identity("Salz", "")]["status"] == "needs_action"
+
+    await syncer._sync("todo.a")
+
+    syncer._apply.assert_awaited_once()
+    assert syncer._apply.await_args.args[0] == "todo.b"
+    assert syncer._apply.await_args.args[3]["status"] == "completed"
+    assert syncer._snapshot[_identity("Salz", "")]["status"] == "completed"
