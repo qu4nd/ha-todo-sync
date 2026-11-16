@@ -437,6 +437,9 @@ def test_last_list_change_event_wins_debounce_window(syncer):
     assert [delay for delay, _, _ in scheduled] == [3, 3]
 
 
+@pytest.mark.asyncio
+async def test_failed_apply_keeps_previous_snapshot_for_retry(syncer):
+    old = item("Milch", description="3")
     syncer._snapshot = {_identity("Milch", "3"): old}
     syncer._fetch = AsyncMock(
         side_effect=[
@@ -553,6 +556,7 @@ async def test_deleting_open_item_is_synced(syncer, trigger, fetch_results, dest
     )
     assert syncer._snapshot == {bread_key: bread}
 
+def test_empty_list_suspects_only_when_a_list_is_completely_empty(syncer):
     syncer._snapshot = {
         _identity("Milk", ""): item("Milk"),
         _identity("Bread", ""): item("Bread"),
@@ -872,6 +876,19 @@ async def test_sync_does_not_depend_on_provider_item_order(syncer, items_a, item
     assert syncer._snapshot == expected_snapshot
 
 
+def test_parse_rejects_invalid_identity_without_exposing_summary(syncer):
+    syncer._supports_description = lambda _entity_id: True
+
+    with pytest.raises(_InvalidItemIdentityError, match="missing_or_empty_summary"):
+        syncer._parse(
+            "todo.a",
+            [{"summary": "  ", "status": "needs_action"}],
+        )
+
+
+@pytest.mark.asyncio
+async def test_invalid_identity_is_classified_and_logged_without_item_content(
+    syncer, caplog
 ):
     syncer._ready = lambda: True
     syncer._sync = AsyncMock(
@@ -925,6 +942,7 @@ def test_empty_list_guard_emits_structured_activation_log(syncer, caplog):
     assert "todo.a" not in caplog.text
 
 
+@pytest.mark.asyncio
 async def test_write_failure_log_has_category_without_item_content(syncer, caplog):
     key = _identity("Secret item", "")
     source = item("Secret item", status="completed")
