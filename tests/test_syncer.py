@@ -903,7 +903,6 @@ def test_empty_list_guard_emits_structured_activation_log(syncer, caplog):
 @pytest.mark.asyncio
 async def test_write_failure_log_has_category_without_item_content(syncer, caplog):
     key = _identity("Secret item", "")
-    source = None
     destination = item("Secret item")
     syncer._supports_description = lambda _entity_id: True
     syncer._apply = AsyncMock(side_effect=RuntimeError("Secret item provider failure"))
