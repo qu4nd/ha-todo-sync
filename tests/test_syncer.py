@@ -420,7 +420,6 @@ async def test_sync_continues_after_write_failure_and_preserves_only_failed_snap
         _identity("Milch", ""): item("Milch"),
         _identity("Brot", ""): item("Brot"),
     }
-    changed_items = {}
     syncer._snapshot = dict(old_items)
     syncer._fetch = AsyncMock(
         side_effect=[
@@ -949,12 +948,7 @@ async def test_duplicate_cleanup_completes_extra_exact_matches_by_uid(syncer):
         {"summary": "Pizza", "description": "4 Käse", "status": "needs_action", "uid": "pizza-a"},
         {"summary": "Pizza", "description": "4 Stagioni", "status": "needs_action", "uid": "pizza-b"},
     ]
-    refreshed = [
-        {**raw[0]},
-        {**raw[1], "status": "completed"},
-        {**raw[2], "status": "completed"},
-        *raw[3:],
-    ]
+    refreshed = [raw[0], *raw[3:]]
     syncer._call = AsyncMock()
     syncer._fetch = AsyncMock(return_value=refreshed)
 
@@ -1013,10 +1007,7 @@ async def test_sync_runs_duplicate_cleanup_before_three_way_diff(syncer):
         {"summary": "Milch", "description": "4 Stück", "status": "needs_action", "uid": "duplicate"},
     ]
     first_b = []
-    refreshed_a = [
-        first_a[0],
-        {**first_a[1], "status": "completed"},
-    ]
+    refreshed_a = [first_a[0]]
     syncer._fetch = AsyncMock(side_effect=[first_a, first_b, refreshed_a])
     syncer._call = AsyncMock()
     syncer._apply = AsyncMock()
@@ -1091,28 +1082,21 @@ async def test_duplicate_cleanup_preflights_both_lists_before_writing(syncer):
 
 
 @pytest.mark.asyncio
-async def test_duplicate_cleanup_does_not_sync_completion_but_later_real_completion_does(syncer):
+async def test_duplicate_cleanup_does_not_propagate_removal_but_later_removal_does(syncer):
     syncer.remove_duplicates = True
     syncer._supports_description = lambda _entity_id: True
     duplicate_a = [
         {"summary": "Salz", "description": "", "status": "needs_action", "uid": "keep"},
         {"summary": "Salz", "description": "", "status": "needs_action", "uid": "duplicate"},
     ]
-    cleaned_a = [
-        duplicate_a[0],
-        {**duplicate_a[1], "status": "completed"},
-    ]
-    completed_a = [
-        {**duplicate_a[0], "status": "completed"},
-        {**duplicate_a[1], "status": "completed"},
-    ]
+    cleaned_a = [duplicate_a[0]]
     open_b = [
         {"summary": "Salz", "description": "", "status": "needs_action", "uid": "bring"}
     ]
     syncer._fetch = AsyncMock(side_effect=[
         duplicate_a, open_b, cleaned_a,  # First run: cleanup only.
         cleaned_a, open_b,               # Second run: stable, no sync write.
-        completed_a, open_b,             # Third run: user completes the remaining item.
+        [], open_b,                      # Third run: the remaining item is no longer open.
     ])
     syncer._call = AsyncMock()
     syncer._apply = AsyncMock()
@@ -1133,7 +1117,10 @@ async def test_duplicate_cleanup_does_not_sync_completion_but_later_real_complet
 
     await syncer._sync("todo.a")
 
-    syncer._apply.assert_awaited_once()
-    assert syncer._apply.await_args.args[0] == "todo.b"
-    assert syncer._apply.await_args.args[3]["status"] == "completed"
-    assert syncer._snapshot[_identity("Salz", "")]["status"] == "completed"
+    syncer._apply.assert_awaited_once_with(
+        "todo.b",
+        {_identity("Salz", ""): {**item("Salz"), "uid": "bring"}},
+        _identity("Salz", ""),
+        None,
+    )
+    assert _identity("Salz", "") not in syncer._snapshot
