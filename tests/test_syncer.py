@@ -966,6 +966,60 @@ async def test_sync_does_not_depend_on_provider_item_order(syncer, items_a, item
     assert syncer._snapshot == expected_snapshot
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        [
+            {"summary": "Milk", "status": "needs_action", "uid": "open"},
+            {"summary": "Milk", "status": "completed", "uid": "history"},
+        ],
+        [
+            {"summary": "Milk", "status": "completed", "uid": "history"},
+            {"summary": "Milk", "status": "needs_action", "uid": "open"},
+        ],
+    ],
+)
+def test_parse_prefers_open_item_over_completed_history(syncer, raw):
+    syncer._supports_description = lambda _entity_id: True
+
+    parsed = syncer._parse("todo.a", raw)
+
+    assert parsed[_identity("Milk", "")]["status"] == "needs_action"
+    assert parsed[_identity("Milk", "")]["uid"] == "open"
+
+
+@pytest.mark.asyncio
+async def test_completed_history_does_not_block_open_item_from_other_list(syncer):
+    key = _identity("Milk", "")
+    historical = [{"summary": "Milk", "status": "completed", "uid": "old"}]
+    open_item = [{"summary": "Milk", "status": "needs_action", "uid": "current"}]
+    syncer._fetch = AsyncMock(side_effect=[historical, open_item])
+    syncer._supports_description = lambda _entity_id: True
+    syncer._apply = AsyncMock()
+
+    await syncer._sync("todo.b")
+
+    syncer._apply.assert_awaited_once_with("todo.a", {}, key, item("Milk"))
+    assert syncer._snapshot[key]["status"] == "needs_action"
+
+
+@pytest.mark.asyncio
+async def test_completed_snapshot_history_does_not_block_reopened_item(syncer):
+    key = _identity("Milk", "")
+    syncer._snapshot = {key: item("Milk", status="completed")}
+    syncer._fetch = AsyncMock(side_effect=[
+        [{"summary": "Milk", "status": "completed", "uid": "old"}],
+        [{"summary": "Milk", "status": "needs_action", "uid": "current"}],
+    ])
+    syncer._supports_description = lambda _entity_id: True
+    syncer._apply = AsyncMock()
+
+    await syncer._sync("todo.b")
+
+    syncer._apply.assert_awaited_once_with("todo.a", {}, key, item("Milk"))
+    assert syncer._snapshot[key]["status"] == "needs_action"
+
+
 def test_parse_rejects_invalid_identity_without_exposing_summary(syncer):
     syncer._supports_description = lambda _entity_id: True
 
@@ -1038,7 +1092,7 @@ async def test_conflict_log_identifies_winner_without_item_content(syncer, caplo
     syncer._snapshot = {key: item("Secret item", status="completed")}
     syncer._fetch = AsyncMock(
         side_effect=[
-            [],
+            [{"summary": "Secret item", "status": "completed"}],
             [{"summary": "Secret item", "status": "needs_action"}],
         ]
     )

@@ -371,7 +371,14 @@ class TodoSyncer:
                 }
                 if item.get("uid"):
                     parsed_item["uid"] = item["uid"]
-                items[_identity(name, desc)] = parsed_item
+                key = _identity(name, desc)
+                existing = items.get(key)
+                # Open entries are active list content; completed entries are history.
+                # If both exist, never let the history record hide the open entry.
+                if existing is None or (
+                    existing["status"] == DONE and parsed_item["status"] == OPEN
+                ):
+                    items[key] = parsed_item
         return items
 
     @staticmethod
@@ -623,6 +630,20 @@ class TodoSyncer:
         # both fields identically on every provider.
         items_a = self._parse(self.a, raw_a)
         items_b = self._parse(self.b, raw_b)
+        # Completed provider records are history, not active list content. Keep
+        # them in the comparison only when the last common snapshot says the item
+        # was open; that is the one case where completion is a real state change.
+        previously_open = {
+            key for key, item in self._snapshot.items() if item["status"] == OPEN
+        }
+        items_a = {
+            key: item for key, item in items_a.items()
+            if item["status"] != DONE or key in previously_open
+        }
+        items_b = {
+            key: item for key, item in items_b.items()
+            if item["status"] != DONE or key in previously_open
+        }
         self._resolve_pending_writes(items_a, items_b)
         return items_a, items_b
 
@@ -734,7 +755,12 @@ class TodoSyncer:
             return False
 
         self._last_synced_items = 0
-        snapshot = self._snapshot
+        # A completed snapshot is no longer active list content. Only an open
+        # baseline is needed to recognize a genuine open -> completed transition.
+        snapshot = {
+            key: item for key, item in self._snapshot.items()
+            if item["status"] == OPEN
+        }
         trigger_side = (
             "A" if trigger == self.a else "B" if trigger == self.b else "periodic"
         )
