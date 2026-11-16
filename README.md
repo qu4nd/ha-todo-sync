@@ -28,6 +28,7 @@
 * 📊 **Synchronization Status:** Exposes a diagnostic sensor per list pair with the current sync state, last successful sync, last error timestamp, and number of changed items.
 * 🛡️ **Empty-List Safety Brake:** Protects your lists against faulty cloud reads. If a list appears completely empty while the snapshot still contains open items, the sync holds back for `6 minutes` to verify the empty result isn't a temporary API glitch. Partial deletions are synchronized immediately.
 * 🕓 **Clean History Handling:** Completed items (such as Bring!'s *"recently used"* history) are never created or deleted on the opposing list—only status changes of mutually existing items are synced.
+* 🧹 **Optional Duplicate Cleanup:** Can complete extra identical open entries on each list before syncing, while keeping one open occurrence. Disabled by default.
 * 🌐 **100% UI Configured:** Full Config Flow & Options Flow support with English and German translations. Zero YAML required.
 
 ---
@@ -89,7 +90,7 @@ Copy the `custom_components/todo_sync` folder into your Home Assistant `<config>
 
 1. Go to **Settings** → **Devices & services** → **Add integration** → search for **To-do Sync**.
 2. Select **List A** and **List B** (must be two different `todo` entities).
-3. *(Optional)* Click **Configure** on the integration entry to adjust the periodic sync interval (`1–1440 min`).
+3. *(Optional)* Click **Configure** on the integration entry to adjust the periodic sync interval (`1–1440 min`) and enable duplicate cleanup. When enabled, extra open entries with the exact same name and description are marked completed before each sync; one open occurrence is kept.
 
 > [!TIP]
 > **First-Time Setup:** Clean up old completed items in both lists before setting up the integration for the cleanest initial snapshot.
