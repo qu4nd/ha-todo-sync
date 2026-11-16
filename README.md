@@ -27,7 +27,7 @@
 * 🔘 **Ad-Hoc Sync Button:** Exposes a `Sync now` button entity per list pair for dashboards or custom automations.
 * 📊 **Synchronization Status:** Exposes a diagnostic sensor per list pair with the current sync state, last successful sync, last error timestamp, and number of changed items.
 * 🛡️ **Empty-List Safety Brake:** Protects your lists against faulty cloud reads. If a list appears completely empty while the snapshot still contains open items, the sync holds back for `6 minutes` to verify the empty result isn't a temporary API glitch. Partial deletions are synchronized immediately.
-* 🕓 **Clean History Handling:** Completed items (such as Bring!'s *"recently used"* history) are treated as provider history, not as active list entries. They do not block a newly added open item with the same name and description from being created on the other list. A completion is synchronized when the snapshot confirms that the item was previously active and its status has changed.
+* 📝 **Open-List Synchronization:** Only currently open items are read and synchronized. Completing an item or deleting it both remove it from the active list, so either action is mirrored on the other list. Duplicate cleanup is the deliberate exception: it completes only extra occurrences while retaining one open occurrence, so the logical item remains active. Provider completion history is outside the synchronization scope.
 * 🧹 **Optional Duplicate Cleanup:** Can complete extra identical open entries on each list before syncing, while keeping one open occurrence. Disabled by default.
 * 🌐 **100% UI Configured:** Full Config Flow & Options Flow support with English and German translations. Zero YAML required.
 
@@ -90,10 +90,7 @@ Copy the `custom_components/todo_sync` folder into your Home Assistant `<config>
 
 1. Go to **Settings** → **Devices & services** → **Add integration** → search for **To-do Sync**.
 2. Select **List A** and **List B** (must be two different `todo` entities).
-3. *(Optional)* Click **Configure** on the integration entry to adjust the periodic sync interval (`1–1440 min`) and enable duplicate cleanup. This option is disabled by default. When enabled, To-do Sync checks both lists before each synchronization and marks additional **open** occurrences of the same logical item as completed, keeping one open occurrence per list. Matching uses the normalized item name and description (case-insensitive; surrounding whitespace is ignored). Entries that are already completed—including provider history such as Bring!'s *recently used* items—are not cleaned up. The cleanup is verified before the normal sync continues; if it cannot be completed or verified safely, that sync run is stopped.
-
-> [!TIP]
-> **First-Time Setup:** Clean up old completed items in both lists before setting up the integration for the cleanest initial snapshot.
+3. *(Optional)* Click **Configure** on the integration entry to adjust the periodic sync interval (`1–1440 min`) and enable duplicate cleanup. This option is disabled by default. When enabled, To-do Sync checks the currently open items on both lists before each synchronization and marks additional open occurrences of the same logical item as completed, keeping one open occurrence per list. Matching uses the normalized item name and description (case-insensitive; surrounding whitespace is ignored). The cleanup is verified before the normal sync continues; if it cannot be completed or verified safely, that sync run is stopped. Previously completed provider history is not fetched or modified.
 
 ---
 
@@ -146,7 +143,7 @@ actions:
 
 ---
 
-## ⚠️ Conflict Resolution & Limitations
+## ⚠️ Synchronization Details & Limitations
 
 ### Provider write delays
 
@@ -154,7 +151,7 @@ Some providers update their Home Assistant entity state asynchronously after a s
 
 Snapshots are written only when their persisted data changes. Transient `syncing` sensor updates remain in memory; final status changes are persisted with a short delayed save to coalesce writes. A snapshot is flushed during unload after any in-flight sync has finished.
 
-* **Conflict Priority:** Items are matched case-insensitively by the combination of name and description. Items with the same name but different descriptions remain independent. If both lists modify the exact same item since the last synchronized snapshot, the most recent Home Assistant list-change event received during the `3 s` debounce window wins. Each new event resets that debounce window, so if both lists change during it, the list whose event arrives last is preferred. If a sync starts without a pending list-change trigger (for example, at startup or on a periodic run), **List A** wins. A manual sync also defaults to **List A** when no list-change trigger is pending.
+* **Open-List State:** Only open items returned by Home Assistant's `todo.get_items` service are part of the synchronization model. The last common snapshot lets the integration distinguish a newly added item from an item removed on one side. Completing and deleting an item have the same effect here: the item is no longer open and is removed from the other active list as well. Completed-item history is not synchronized.
 * **Renaming Items:** Changing an item's name or description is processed as a deletion of the old name/details pair + creation of the new pair.
 * **Exact Duplicates:** Two entries with exactly the same name and description are treated as one logical item; the Home Assistant sync model does not currently preserve duplicate multiplicity.
 * **Ambiguous Text on Alexa:** Lists without description support always split a title at the first space: the first word becomes the item name and everything after it becomes the description. For example, `"Milch fettarm"` is interpreted as name `Milch` and description `fettarm`. The integration cannot distinguish a multi-word product name from a name followed by details; this rule applies to new items as well.
@@ -164,7 +161,7 @@ Snapshots are written only when their persisted data changes. Transient `syncing
 
 ## 🔍 Troubleshooting & Debug Logging
 
-If either configured `todo` entity is missing, `unknown`, or `unavailable`, the sensor enters `waiting`, identifies the affected entity through its diagnostic attributes, and pauses synchronization. The integration retries every `30 seconds` and resumes automatically when both entities are available again. A warning is logged only when the unavailable condition or affected entity changes, avoiding repeated identical warnings. At startup, the integration uses the same waiting behavior until both `todo` entities are available. Debug logging provides privacy-safe operational context through stable `sync_event` and `category` fields, including run start counts, conflict winners, copy/delete direction, completed-history skips, pending-write outcomes, and retry timing. Error categories distinguish `read_failure`, `write_failure`, `invalid_identity`, and unexpected failures; the empty-list safety brake is logged separately as `empty_list_guard`. Invalid provider records with missing, empty, or malformed identity data fail the run safely instead of being interpreted as deletions. Error logs include only generic reasons and exception class names, never exception messages or tracebacks, because providers may include item titles or service data in them. List item names, descriptions, and task contents are never included in log messages. While the sensor is in `waiting`, the affected entity ID is exposed through `waiting_entity` and `waiting_state`; warning logs identify the affected list as A or B without printing its entity ID. The synchronization snapshot is stored locally in Home Assistant. To inspect this diagnostic information, enable debug logging:
+If either configured `todo` entity is missing, `unknown`, or `unavailable`, the sensor enters `waiting`, identifies the affected entity through its diagnostic attributes, and pauses synchronization. The integration retries every `30 seconds` and resumes automatically when both entities are available again. A warning is logged only when the unavailable condition or affected entity changes, avoiding repeated identical warnings. At startup, the integration uses the same waiting behavior until both `todo` entities are available. Debug logging provides privacy-safe operational context through stable `sync_event` and `category` fields, including run start counts, copy/delete direction, pending-write outcomes, and retry timing. Error categories distinguish `read_failure`, `write_failure`, `invalid_identity`, and unexpected failures; the empty-list safety brake is logged separately as `empty_list_guard`. Invalid provider records with missing, empty, or malformed identity data fail the run safely instead of being interpreted as deletions. Error logs include only generic reasons and exception class names, never exception messages or tracebacks, because providers may include item titles or service data in them. List item names, descriptions, and task contents are never included in log messages. While the sensor is in `waiting`, the affected entity ID is exposed through `waiting_entity` and `waiting_state`; warning logs identify the affected list as A or B without printing its entity ID. The synchronization snapshot is stored locally in Home Assistant. To inspect this diagnostic information, enable debug logging:
 
 **Option A: Temporary via UI**  
 Go to **Developer tools** → **Actions** → call `logger.set_level`:

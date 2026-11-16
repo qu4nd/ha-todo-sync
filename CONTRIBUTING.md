@@ -31,7 +31,7 @@ The GitHub Actions validation workflow runs the same Ruff and pytest checks, fol
 ## Project structure
 
 - `custom_components/todo_sync/__init__.py`: Home Assistant integration entry points and config-entry setup, reload and unload lifecycle.
-- `custom_components/todo_sync/syncer.py`: runtime coordination and the synchronization workflow, including provider reads and writes, event handling and conflict resolution.
+- `custom_components/todo_sync/syncer.py`: runtime coordination and the synchronization workflow, including provider reads and writes, event handling and snapshot-based change resolution.
 - `custom_components/todo_sync/models.py`: typed to-do item models and normalized item identity.
 - `custom_components/todo_sync/status.py`: synchronization state and status model.
 - `custom_components/todo_sync/storage.py`: persisted synchronization data, snapshots, serialization and storage migration.
@@ -48,12 +48,13 @@ The GitHub Actions validation workflow runs the same Ruff and pytest checks, fol
 
 To-do items are matched by the combination of normalized name and description. Leading/trailing whitespace is removed from each field and matching is case-insensitive. Items with the same name but different descriptions are independent; exact duplicates (same normalized name and description) are treated as one logical item. The integration stores a snapshot of the last successfully synchronized state and compares both current lists against it (a three-way comparison). For providers without description support, the title is split at the first space: the first word is the name and the remainder is the description.
 
-This snapshot is important: it lets the integration distinguish a change on one side from a conflict where both sides changed. If both sides changed, the list that triggered the run wins; a periodic run without a triggering list defaults to List A.
+This snapshot is important: it records the last common set of open items. It lets the integration distinguish a newly added item from an item removed on one side. The integration reads the open list only: Home Assistant's `todo.get_items` default status is `needs_action`. An item that is completed or deleted is therefore absent from the active-list result, and either action is synchronized as removal from the other list. Completed provider history is outside the synchronization scope.
 
 A few behaviors are intentional:
 
 - Both lists are read before any changes are applied. A failed read must not be interpreted as an empty list.
-- Completed items are treated as provider history and are not recreated or deleted on the other list when absent there.
+- Only open items are read. Completed provider history is not fetched, compared, or synchronized.
+- Completing or deleting an open item both remove it from the active list; the absence is propagated to the other list. Duplicate cleanup is the exception: it completes only extra occurrences while retaining one open occurrence of the logical item.
 - If a list appears completely empty while the snapshot still contains open items, synchronization is held back for six minutes to guard against a transient or incomplete provider read. If the list is still empty after that confirmation window, the empty result is accepted. Partial deletions are synchronized immediately; there is no item-count or percentage threshold.
 - Read and write failures are retried with bounded exponential backoff, starting at 30 seconds and capped at 300 seconds. Failed item writes keep their previous snapshot value so the next run can detect and retry the outstanding change.
 
