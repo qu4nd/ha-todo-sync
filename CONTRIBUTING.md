@@ -31,7 +31,7 @@ The GitHub Actions validation workflow runs the same Ruff and pytest checks, fol
 ## Project structure
 
 - `custom_components/todo_sync/__init__.py`: Home Assistant integration entry points and config-entry setup, reload and unload lifecycle.
-- `custom_components/todo_sync/syncer.py`: runtime coordination and the synchronization workflow, including provider reads and writes, event handling and conflict resolution.
+- `custom_components/todo_sync/syncer.py`: runtime coordination and the synchronization workflow, including provider reads and writes, event handling and snapshot-based change resolution.
 - `custom_components/todo_sync/models.py`: typed to-do item models and normalized item identity.
 - `custom_components/todo_sync/status.py`: synchronization state and status model.
 - `custom_components/todo_sync/storage.py`: persisted synchronization data, snapshots, serialization and storage migration.
