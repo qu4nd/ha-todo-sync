@@ -27,7 +27,7 @@
 * 🔘 **Ad-Hoc Sync Button:** Exposes a `Sync now` button entity per list pair for dashboards or custom automations.
 * 📊 **Synchronization Status:** Exposes a diagnostic sensor per list pair with the current sync state, last successful sync, last error timestamp, and number of changed items.
 * 🛡️ **Empty-List Safety Brake:** Protects your lists against faulty cloud reads. If a list appears completely empty while the snapshot still contains open items, the sync holds back for `6 minutes` to verify the empty result isn't a temporary API glitch. Partial deletions are synchronized immediately.
-* 🕓 **Clean History Handling:** Completed items (such as Bring!'s *"recently used"* history) are never created or deleted on the opposing list—only status changes of mutually existing items are synced.
+* 🕓 **Clean History Handling:** Completed items (such as Bring!'s *"recently used"* history) are treated as provider history, not as active list entries. They do not block a newly added open item with the same name and description from being created on the other list. A completion is synchronized when the snapshot confirms that the item was previously active and its status has changed.
 * 🧹 **Optional Duplicate Cleanup:** Can complete extra identical open entries on each list before syncing, while keeping one open occurrence. Disabled by default.
 * 🌐 **100% UI Configured:** Full Config Flow & Options Flow support with English and German translations. Zero YAML required.
 
