@@ -394,11 +394,18 @@ def test_last_list_change_event_wins_debounce_window(syncer):
 @pytest.mark.asyncio
 async def test_failed_apply_keeps_previous_snapshot_for_retry(syncer):
     old = item("Milch", description="3")
-    syncer._snapshot = {_identity("Milch", "3"): old}
+    bread = item("Brot")
+    syncer._snapshot = {
+        _identity("Milch", "3"): old,
+        _identity("Brot", ""): bread,
+    }
     syncer._fetch = AsyncMock(
         side_effect=[
-            [],
-            [{"summary": "Milch", "status": "needs_action", "description": "3"}],
+            [{"summary": "Brot", "status": "needs_action", "description": ""}],
+            [
+                {"summary": "Milch", "status": "needs_action", "description": "3"},
+                {"summary": "Brot", "status": "needs_action", "description": ""},
+            ],
         ]
     )
     syncer._supports_description = lambda _entity_id: True
@@ -408,7 +415,10 @@ async def test_failed_apply_keeps_previous_snapshot_for_retry(syncer):
 
     syncer._apply.assert_awaited_once()
     assert write_failed is True
-    assert syncer._snapshot == {_identity("Milch", "3"): old}
+    assert syncer._snapshot == {
+        _identity("Milch", "3"): old,
+        _identity("Brot", ""): bread,
+    }
     assert syncer._pending_writes == {}
 
 
@@ -419,14 +429,15 @@ async def test_sync_continues_after_write_failure_and_preserves_only_failed_snap
     old_items = {
         _identity("Milch", ""): item("Milch"),
         _identity("Brot", ""): item("Brot"),
+        _identity("Wasser", ""): item("Wasser"),
     }
     syncer._snapshot = dict(old_items)
     syncer._fetch = AsyncMock(
         side_effect=[
-            [],
+            [{"summary": "Wasser", "status": "needs_action", "description": ""}],
             [
                 {"summary": name, "status": "needs_action", "description": ""}
-                for name in ("Milch", "Brot")
+                for name in ("Milch", "Brot", "Wasser")
             ],
         ]
     )
@@ -449,7 +460,10 @@ async def test_sync_continues_after_write_failure_and_preserves_only_failed_snap
 
     failed_key = attempted_keys[0]
     successful_key = attempted_keys[1]
-    assert syncer._snapshot == {failed_key: old_items[failed_key]}
+    assert syncer._snapshot == {
+        failed_key: old_items[failed_key],
+        _identity("Wasser", ""): old_items[_identity("Wasser", "")],
+    }
     assert syncer._last_synced_items == 1
     assert syncer._pending_key("todo.b", successful_key) in syncer._pending_writes
     assert syncer._pending_key("todo.b", failed_key) not in syncer._pending_writes
@@ -1088,15 +1102,17 @@ async def test_duplicate_cleanup_does_not_propagate_removal_but_later_removal_do
     duplicate_a = [
         {"summary": "Salz", "description": "", "status": "needs_action", "uid": "keep"},
         {"summary": "Salz", "description": "", "status": "needs_action", "uid": "duplicate"},
+        {"summary": "Brot", "description": "", "status": "needs_action", "uid": "bread-a"},
     ]
-    cleaned_a = [duplicate_a[0]]
+    cleaned_a = [duplicate_a[0], duplicate_a[2]]
     open_b = [
-        {"summary": "Salz", "description": "", "status": "needs_action", "uid": "bring"}
+        {"summary": "Salz", "description": "", "status": "needs_action", "uid": "bring"},
+        {"summary": "Brot", "description": "", "status": "needs_action", "uid": "bread-b"},
     ]
     syncer._fetch = AsyncMock(side_effect=[
         duplicate_a, open_b, cleaned_a,  # First run: cleanup only.
         cleaned_a, open_b,               # Second run: stable, no sync write.
-        [], open_b,                      # Third run: the remaining item is no longer open.
+        [duplicate_a[2]], open_b,        # Third run: Salz is no longer open.
     ])
     syncer._call = AsyncMock()
     syncer._apply = AsyncMock()
@@ -1119,8 +1135,12 @@ async def test_duplicate_cleanup_does_not_propagate_removal_but_later_removal_do
 
     syncer._apply.assert_awaited_once_with(
         "todo.b",
-        {_identity("Salz", ""): {**item("Salz"), "uid": "bring"}},
+        {
+            _identity("Salz", ""): {**item("Salz"), "uid": "bring"},
+            _identity("Brot", ""): {**item("Brot"), "uid": "bread-b"},
+        },
         _identity("Salz", ""),
         None,
     )
     assert _identity("Salz", "") not in syncer._snapshot
+    assert _identity("Brot", "") in syncer._snapshot
