@@ -40,12 +40,16 @@ async def test_fetch_requests_open_items_only(syncer):
             ]
         }
     }
-    syncer.hass.services.async_call = AsyncMock(return_value=response)
+    with patch.object(
+        type(syncer.hass.services), "async_call", autospec=True
+    ) as async_call:
+        async_call.return_value = response
 
-    items = await syncer._fetch("todo.a")
+        items = await syncer._fetch("todo.a")
 
     assert items == response["todo.a"]["items"]
-    syncer.hass.services.async_call.assert_awaited_once_with(
+    async_call.assert_awaited_once_with(
+        syncer.hass.services,
         "todo",
         "get_items",
         {"entity_id": "todo.a"},
@@ -455,7 +459,11 @@ async def test_sync_continues_after_write_failure_and_preserves_only_failed_snap
     write_failed = await syncer._sync("todo.a")
 
     assert write_failed is True
-    assert set(attempted_keys) == set(old_items)
+    expected_write_keys = {
+        _identity("Milch", ""),
+        _identity("Brot", ""),
+    }
+    assert set(attempted_keys) == expected_write_keys
     assert syncer._apply.await_count == 2
 
     failed_key = attempted_keys[0]
