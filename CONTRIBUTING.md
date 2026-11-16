@@ -54,7 +54,7 @@ A few behaviors are intentional:
 
 - Both lists are read before any changes are applied. A failed read must not be interpreted as an empty list.
 - Only open items are read. Completed provider history is not fetched, compared, or synchronized.
-- Completing or deleting an open item both remove it from the active list; the absence is propagated to the other list.
+- Completing or deleting an open item both remove it from the active list; the absence is propagated to the other list. Duplicate cleanup is the exception: it completes only extra occurrences while retaining one open occurrence of the logical item.
 - If a list appears completely empty while the snapshot still contains open items, synchronization is held back for six minutes to guard against a transient or incomplete provider read. If the list is still empty after that confirmation window, the empty result is accepted. Partial deletions are synchronized immediately; there is no item-count or percentage threshold.
 - Read and write failures are retried with bounded exponential backoff, starting at 30 seconds and capped at 300 seconds. Failed item writes keep their previous snapshot value so the next run can detect and retry the outstanding change.
 
