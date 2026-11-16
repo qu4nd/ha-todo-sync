@@ -780,11 +780,13 @@ class TodoSyncer:
         if trigger == self.a and a is not None and a["status"] == OPEN and (
             b is not None and b["status"] == DONE
         ):
+            from_a = True
             source, dest_id, dest_items = a, self.b, items_b
             dest_items.pop(key, None)
         elif trigger == self.b and b is not None and b["status"] == OPEN and (
             a is not None and a["status"] == DONE
         ):
+            from_a = False
             source, dest_id, dest_items = b, self.a, items_a
             dest_items.pop(key, None)
 
