@@ -27,7 +27,7 @@
 * 🔘 **Ad-Hoc Sync Button:** Exposes a `Sync now` button entity per list pair for dashboards or custom automations.
 * 📊 **Synchronization Status:** Exposes a diagnostic sensor per list pair with the current sync state, last successful sync, last error timestamp, and number of changed items.
 * 🛡️ **Empty-List Safety Brake:** Protects your lists against faulty cloud reads. If a list appears completely empty while the snapshot still contains open items, the sync holds back for `6 minutes` to verify the empty result isn't a temporary API glitch. Partial deletions are synchronized immediately.
-* 📝 **Open-List Synchronization:** Only currently open items are read and synchronized. Completing an item or deleting it both remove it from the active list, so either action is mirrored on the other list. Provider completion history is outside the synchronization scope.
+* 📝 **Open-List Synchronization:** Only currently open items are read and synchronized. Completing an item or deleting it both remove it from the active list, so either action is mirrored on the other list. Duplicate cleanup is the deliberate exception: it completes only extra occurrences while retaining one open occurrence, so the logical item remains active. Provider completion history is outside the synchronization scope.
 * 🧹 **Optional Duplicate Cleanup:** Can complete extra identical open entries on each list before syncing, while keeping one open occurrence. Disabled by default.
 * 🌐 **100% UI Configured:** Full Config Flow & Options Flow support with English and German translations. Zero YAML required.
 
@@ -90,7 +90,7 @@ Copy the `custom_components/todo_sync` folder into your Home Assistant `<config>
 
 1. Go to **Settings** → **Devices & services** → **Add integration** → search for **To-do Sync**.
 2. Select **List A** and **List B** (must be two different `todo` entities).
-3. *(Optional)* Click **Configure** on the integration entry to adjust the periodic sync interval (`1–1440 min`) and enable duplicate cleanup. This option is disabled by default. When enabled, To-do Sync checks the currently open items on both lists before each synchronization and marks additional open occurrences of the same logical item as completed, keeping one open occurrence per list. Matching uses the normalized item name and description (case-insensitive; surrounding whitespace is ignored). The cleanup is verified before the normal sync continues; if it cannot be completed or verified safely, that sync run is stopped. Completed provider history is not fetched or modified.
+3. *(Optional)* Click **Configure** on the integration entry to adjust the periodic sync interval (`1–1440 min`) and enable duplicate cleanup. This option is disabled by default. When enabled, To-do Sync checks the currently open items on both lists before each synchronization and marks additional open occurrences of the same logical item as completed, keeping one open occurrence per list. Matching uses the normalized item name and description (case-insensitive; surrounding whitespace is ignored). The cleanup is verified before the normal sync continues; if it cannot be completed or verified safely, that sync run is stopped. Previously completed provider history is not fetched or modified.
 
 ---
 
