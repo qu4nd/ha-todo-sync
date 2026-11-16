@@ -297,7 +297,8 @@ class TodoSyncer:
                     last_error_type="DuplicateCleanupError",
                     synced_items=0,
                 )
-                self._schedule_retry(trigger, "duplicate_cleanup_failure")
+                if err.reason != "duplicate_without_unique_uid":
+                    self._schedule_retry(trigger, "duplicate_cleanup_failure")
             except _InvalidItemIdentityError as err:
                 _LOGGER.error(
                     "sync_event=invalid_identity category=invalid_identity "
@@ -383,7 +384,9 @@ class TodoSyncer:
             summary = item.get("summary")
             if not isinstance(summary, str) or not summary.strip():
                 raise _InvalidItemIdentityError(entity_id, "missing_or_empty_summary")
-            description = item.get("description") or ""
+            description = item.get("description")
+            if description is None:
+                description = ""
             if not isinstance(description, str):
                 raise _InvalidItemIdentityError(entity_id, "invalid_description")
             name, details = summary.strip(), description.strip()

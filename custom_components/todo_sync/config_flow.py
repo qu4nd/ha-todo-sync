@@ -78,7 +78,9 @@ class TodoSyncOptionsFlow(config_entries.OptionsFlow):
                             unit_of_measurement="min",
                         )
                     ),
-                    vol.Required(CONF_REMOVE_DUPLICATES, default=remove_duplicates): selector.BooleanSelector(),
+                    vol.Required(
+                        CONF_REMOVE_DUPLICATES, default=remove_duplicates
+                    ): selector.BooleanSelector(),
                 }
             ),
         )

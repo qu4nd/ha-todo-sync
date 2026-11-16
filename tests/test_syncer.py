@@ -1093,7 +1093,7 @@ async def test_conflict_log_identifies_winner_without_item_content(syncer, caplo
     syncer._fetch = AsyncMock(
         side_effect=[
             [{"summary": "Secret item", "status": "completed"}],
-            [{"summary": "Secret item", "status": "needs_action"}],
+            [],
         ]
     )
     syncer._supports_description = lambda _entity_id: True
