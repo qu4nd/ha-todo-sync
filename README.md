@@ -90,7 +90,7 @@ Copy the `custom_components/todo_sync` folder into your Home Assistant `<config>
 
 1. Go to **Settings** → **Devices & services** → **Add integration** → search for **To-do Sync**.
 2. Select **List A** and **List B** (must be two different `todo` entities).
-3. *(Optional)* Click **Configure** on the integration entry to adjust the periodic sync interval (`1–1440 min`) and enable duplicate cleanup. When enabled, extra open entries with the exact same name and description are marked completed before each sync; one open occurrence is kept.
+3. *(Optional)* Click **Configure** on the integration entry to adjust the periodic sync interval (`1–1440 min`) and enable duplicate cleanup. This option is disabled by default. When enabled, To-do Sync checks both lists before each synchronization and marks additional **open** occurrences of the same logical item as completed, keeping one open occurrence per list. Matching uses the normalized item name and description (case-insensitive; surrounding whitespace is ignored). Entries that are already completed—including provider history such as Bring!'s *recently used* items—are not cleaned up. The cleanup is verified before the normal sync continues; if it cannot be completed or verified safely, that sync run is stopped.
 
 > [!TIP]
 > **First-Time Setup:** Clean up old completed items in both lists before setting up the integration for the cleanest initial snapshot.
