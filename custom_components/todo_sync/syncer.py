@@ -797,7 +797,7 @@ class TodoSyncer:
             and trigger in (None, self.b)
         ):
             from_a = False
-            source, dest_id, dest_items = b, self.a, items_b
+            source, dest_id, dest_items = b, self.a, items_a
             dest_items.pop(key, None)
 
         dest = dest_items.get(key)
