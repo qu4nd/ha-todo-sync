@@ -77,7 +77,7 @@ def test_pending_write_masks_stale_destination_read_until_provider_catches_up(sy
     assert key not in items_b
     assert syncer._pending_key("todo.b", key) in syncer._pending_writes
 
-    # Once the provider exposes the expected value, the expectation is acknowledged.
+    # Once the provider reflects the removal, the expectation is acknowledged.
     syncer._resolve_pending_writes(items_a, items_b)
     assert syncer._pending_writes == {}
 
