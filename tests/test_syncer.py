@@ -1093,11 +1093,18 @@ def test_empty_list_guard_emits_structured_activation_log(syncer, caplog):
 @pytest.mark.asyncio
 async def test_conflict_log_identifies_winner_without_item_content(syncer, caplog):
     key = _identity("Secret item", "")
-    syncer._snapshot = {key: item("Secret item")}
+    bread_key = _identity("Bread", "")
+    syncer._snapshot = {
+        key: item("Secret item"),
+        bread_key: item("Bread"),
+    }
     syncer._fetch = AsyncMock(
         side_effect=[
-            [{"summary": "Secret item", "status": "completed"}],
-            [],
+            [
+                {"summary": "Secret item", "status": "completed"},
+                {"summary": "Bread", "status": "needs_action"},
+            ],
+            [{"summary": "Bread", "status": "needs_action"}],
         ]
     )
     syncer._supports_description = lambda _entity_id: True
