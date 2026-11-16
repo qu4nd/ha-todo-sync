@@ -9,7 +9,14 @@ from homeassistant.helpers import selector
 
 from homeassistant.core import callback
 
-from .const import CONF_INTERVAL, CONF_LIST_A, CONF_LIST_B, DOMAIN, SCAN_INTERVAL_MINUTES
+from .const import (
+    CONF_INTERVAL,
+    CONF_LIST_A,
+    CONF_LIST_B,
+    CONF_REMOVE_DUPLICATES,
+    DOMAIN,
+    SCAN_INTERVAL_MINUTES,
+)
 
 _SELECTOR = selector.EntitySelector(selector.EntitySelectorConfig(domain="todo"))
 
@@ -51,12 +58,13 @@ class TodoSyncConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class TodoSyncOptionsFlow(config_entries.OptionsFlow):
-    """Configure the periodic sync interval."""
+    """Configure synchronization behavior."""
 
     async def async_step_init(self, user_input=None):
         if user_input is not None:
             return self.async_create_entry(data=user_input)
         current = self.config_entry.options.get(CONF_INTERVAL, SCAN_INTERVAL_MINUTES)
+        remove_duplicates = self.config_entry.options.get(CONF_REMOVE_DUPLICATES, False)
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
@@ -69,7 +77,10 @@ class TodoSyncOptionsFlow(config_entries.OptionsFlow):
                             mode=selector.NumberSelectorMode.BOX,
                             unit_of_measurement="min",
                         )
-                    )
+                    ),
+                    vol.Required(
+                        CONF_REMOVE_DUPLICATES, default=remove_duplicates
+                    ): selector.BooleanSelector(),
                 }
             ),
         )

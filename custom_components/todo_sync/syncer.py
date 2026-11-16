@@ -22,6 +22,7 @@ from .const import (
     CONF_INTERVAL,
     CONF_LIST_A,
     CONF_LIST_B,
+    CONF_REMOVE_DUPLICATES,
     DEBOUNCE_SECONDS,
     DOMAIN,
     DONE,
@@ -54,6 +55,16 @@ class _TodoListReadError(Exception):
     """Raised when fetching either source list fails before sync changes are applied."""
 
 
+class _DuplicateCleanupError(Exception):
+    """Raised when duplicate cleanup cannot safely complete."""
+
+    def __init__(self, entity_id: str, reason: str, *, retryable: bool = False) -> None:
+        super().__init__(reason)
+        self.entity_id = entity_id
+        self.reason = reason
+        self.retryable = retryable
+
+
 class _InvalidItemIdentityError(ValueError):
     """Raised when provider data cannot produce a safe, stable item identity."""
 
@@ -71,6 +82,9 @@ class TodoSyncer:
         self.a: str = entry.data[CONF_LIST_A]
         self.b: str = entry.data[CONF_LIST_B]
         self.interval: int = int(entry.options.get(CONF_INTERVAL, SCAN_INTERVAL_MINUTES))
+        self.remove_duplicates: bool = bool(
+            entry.options.get(CONF_REMOVE_DUPLICATES, False)
+        )
         self._store = TodoSyncStorage(hass, f"{DOMAIN}.{entry.entry_id}")
         self._lock = asyncio.Lock()
         # Last successfully synchronized state, keyed by normalized name + description.
@@ -273,6 +287,21 @@ class TodoSyncer:
                     synced_items=0,
                 )
                 self._schedule_retry(trigger, "read_failure")
+            except _DuplicateCleanupError as err:
+                _LOGGER.error(
+                    "sync_event=duplicate_cleanup_failed category=duplicate_cleanup "
+                    "list=%s reason=%s",
+                    self._list_side(err.entity_id),
+                    err.reason,
+                )
+                await self._set_status(
+                    SyncState.ERROR,
+                    last_error=self._now(),
+                    last_error_type="DuplicateCleanupError",
+                    synced_items=0,
+                )
+                if err.retryable:
+                    self._schedule_retry(trigger, "duplicate_cleanup_failure")
             except _InvalidItemIdentityError as err:
                 _LOGGER.error(
                     "sync_event=invalid_identity category=invalid_identity "
@@ -342,37 +371,112 @@ class TodoSyncer:
         )
         return resp[entity_id]["items"]
 
+    def _parse_item(
+        self, entity_id: str, item: dict
+    ) -> tuple[ItemKey, TodoItem]:
+        """Parse one provider record without losing its provider-local identity."""
+        if not isinstance(item, dict):
+            raise _InvalidItemIdentityError(entity_id, "invalid_item_record")
+        summary = item.get("summary")
+        if not isinstance(summary, str) or not summary.strip():
+            raise _InvalidItemIdentityError(entity_id, "missing_or_empty_summary")
+        title = summary.strip()
+        description = item.get("description")
+        if description is None:
+            description = ""
+        if not isinstance(description, str):
+            raise _InvalidItemIdentityError(entity_id, "invalid_description")
+        name, desc = title, description.strip()
+        if not self._supports_description(entity_id):
+            name, desc = self._split_title(title)
+        if not name:
+            raise _InvalidItemIdentityError(entity_id, "missing_or_empty_name")
+        parsed_item: TodoItem = {
+            "title": title,
+            "name": name,
+            "status": item["status"],
+            "description": desc,
+        }
+        if item.get("uid"):
+            parsed_item["uid"] = item["uid"]
+        return _identity(name, desc), parsed_item
+
     def _parse(self, entity_id: str, raw: list[dict]) -> dict[ItemKey, TodoItem]:
         items: dict[ItemKey, TodoItem] = {}
-        supports = self._supports_description(entity_id)
         for item in raw:
-            if not isinstance(item, dict):
-                raise _InvalidItemIdentityError(entity_id, "invalid_item_record")
-            summary = item.get("summary")
-            if not isinstance(summary, str) or not summary.strip():
-                raise _InvalidItemIdentityError(entity_id, "missing_or_empty_summary")
-            title = summary.strip()
-            description = item.get("description")
-            if description is None:
-                description = ""
-            if not isinstance(description, str):
-                raise _InvalidItemIdentityError(entity_id, "invalid_description")
-            name, desc = title, description.strip()
-            if not supports:
-                name, desc = self._split_title(title)
-            if name:
-                # Keep the original provider title for safe service addressing;
-                # it is not part of cross-provider identity.
-                parsed_item: TodoItem = {
-                    "title": title,
-                    "name": name,
-                    "status": item["status"],
-                    "description": desc,
-                }
-                if item.get("uid"):
-                    parsed_item["uid"] = item["uid"]
-                items[_identity(name, desc)] = parsed_item
+            key, parsed_item = self._parse_item(entity_id, item)
+            existing = items.get(key)
+            # An open duplicate must take precedence over completed provider history.
+            if existing is None or (
+                existing["status"] != OPEN and parsed_item["status"] == OPEN
+            ):
+                items[key] = parsed_item
         return items
+
+    def _duplicate_cleanup_plan(self, entity_id: str, raw: list[dict]) -> list[str]:
+        """Return UIDs of duplicate open entries, validating all targets first."""
+        groups: dict[ItemKey, list[TodoItem]] = {}
+        uid_counts: dict[str, int] = {}
+        for item in raw:
+            key, parsed = self._parse_item(entity_id, item)
+            uid = parsed.get("uid")
+            if uid:
+                uid_counts[uid] = uid_counts.get(uid, 0) + 1
+            if parsed["status"] == OPEN:
+                groups.setdefault(key, []).append(parsed)
+
+        duplicate_uids: list[str] = []
+        for group in groups.values():
+            # Keep the first open occurrence; complete every additional occurrence.
+            for duplicate in group[1:]:
+                uid = duplicate.get("uid")
+                if not isinstance(uid, str) or not uid or uid_counts.get(uid) != 1:
+                    raise _DuplicateCleanupError(
+                        entity_id, "duplicate_without_unique_uid"
+                    )
+                duplicate_uids.append(uid)
+        return duplicate_uids
+
+    async def _cleanup_duplicate_uids(
+        self, entity_id: str, raw: list[dict], duplicate_uids: list[str]
+    ) -> list[dict]:
+        """Complete duplicate entries by UID and verify the provider reflects writes."""
+        if not duplicate_uids:
+            return raw
+        for uid in duplicate_uids:
+            try:
+                await self._call(
+                    "update_item",
+                    {"entity_id": entity_id, "item": uid, "status": DONE},
+                )
+            except Exception as err:  # noqa: BLE001
+                raise _DuplicateCleanupError(
+                    entity_id, "duplicate_update_failed", retryable=True
+                ) from err
+
+        try:
+            refreshed = await self._fetch(entity_id)
+        except Exception as err:  # noqa: BLE001
+            raise _DuplicateCleanupError(
+                entity_id, "duplicate_verification_read_failed", retryable=True
+            ) from err
+
+        statuses_by_uid = {
+            item.get("uid"): item.get("status")
+            for item in refreshed
+            if isinstance(item, dict) and item.get("uid")
+        }
+        if any(statuses_by_uid.get(uid) != DONE for uid in duplicate_uids):
+            raise _DuplicateCleanupError(
+                entity_id, "duplicate_update_not_reflected", retryable=True
+            )
+        _LOGGER.debug(
+            "sync_event=duplicates_completed category=duplicate_cleanup "
+            "list=%s count=%d",
+            self._list_side(entity_id),
+            len(duplicate_uids),
+        )
+        return refreshed
 
     @staticmethod
     def _split_title(title: str) -> tuple[str, str]:
@@ -725,6 +829,18 @@ class TodoSyncer:
         # Read both lists completely before applying anything. A failed read must
         # never be interpreted as an empty list or advance the persisted snapshot.
         raw_a, raw_b = await self._read_lists()
+        if self.remove_duplicates:
+            # Validate both plans before issuing any writes. This prevents a missing
+            # or ambiguous UID on the second list from following partial cleanup
+            # writes on the first list.
+            duplicate_uids_a = self._duplicate_cleanup_plan(self.a, raw_a)
+            duplicate_uids_b = self._duplicate_cleanup_plan(self.b, raw_b)
+            raw_a = await self._cleanup_duplicate_uids(
+                self.a, raw_a, duplicate_uids_a
+            )
+            raw_b = await self._cleanup_duplicate_uids(
+                self.b, raw_b, duplicate_uids_b
+            )
         items_a, items_b = self._prepare_items(raw_a, raw_b)
 
         # A completely empty list can be a transient provider/API read failure.

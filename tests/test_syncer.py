@@ -12,6 +12,7 @@ from custom_components.todo_sync.policy import MAX_RETRY_SECONDS, RETRY_SECONDS
 from custom_components.todo_sync.storage import TodoSyncStorage
 from custom_components.todo_sync.syncer import (
     TodoSyncer,
+    _DuplicateCleanupError,
     _InvalidItemIdentityError,
     _TodoListReadError,
     _identity,
@@ -1100,3 +1101,165 @@ def test_pending_write_resolution_logs_outcome_without_item_content(
     assert f"outcome={expected_outcome}" in caplog.text
     assert "sync_event=pending_write_resolved" in caplog.text
     assert "Secret item" not in caplog.text
+
+
+
+@pytest.mark.asyncio
+async def test_duplicate_cleanup_completes_extra_exact_matches_by_uid(syncer):
+    syncer._supports_description = lambda _entity_id: True
+    raw = [
+        {"summary": "Milch", "description": "4 Stück", "status": "needs_action", "uid": "keep"},
+        {"summary": "Milch", "description": "4 Stück", "status": "needs_action", "uid": "complete"},
+        {"summary": "Milch", "description": "4 Stück", "status": "needs_action", "uid": "complete-2"},
+        {"summary": "Pizza", "description": "4 Käse", "status": "needs_action", "uid": "pizza-a"},
+        {"summary": "Pizza", "description": "4 Stagioni", "status": "needs_action", "uid": "pizza-b"},
+    ]
+    refreshed = [
+        {**raw[0]},
+        {**raw[1], "status": "completed"},
+        {**raw[2], "status": "completed"},
+        *raw[3:],
+    ]
+    syncer._call = AsyncMock()
+    syncer._fetch = AsyncMock(return_value=refreshed)
+
+    plan = syncer._duplicate_cleanup_plan("todo.a", raw)
+    result = await syncer._cleanup_duplicate_uids("todo.a", raw, plan)
+
+    assert plan == ["complete", "complete-2"]
+    assert [call.args for call in syncer._call.await_args_list] == [
+        ("update_item", {"entity_id": "todo.a", "item": "complete", "status": "completed"}),
+        ("update_item", {"entity_id": "todo.a", "item": "complete-2", "status": "completed"}),
+    ]
+    assert result == refreshed
+    syncer._fetch.assert_awaited_once_with("todo.a")
+
+
+def test_duplicate_cleanup_uses_name_and_description(syncer):
+    syncer._supports_description = lambda _entity_id: True
+    raw = [
+        {"summary": "Pizza", "description": "4 Käse", "status": "needs_action", "uid": "a"},
+        {"summary": "Pizza", "description": "4 Stagioni", "status": "needs_action", "uid": "b"},
+        {"summary": "Milch", "description": "1 Liter", "status": "needs_action", "uid": "c"},
+        {"summary": "Milch", "description": "2 Liter", "status": "needs_action", "uid": "d"},
+    ]
+
+    assert syncer._duplicate_cleanup_plan("todo.a", raw) == []
+
+
+def test_duplicate_cleanup_ignores_completed_history(syncer):
+    syncer._supports_description = lambda _entity_id: True
+    raw = [
+        {"summary": "Milch", "description": "4 Stück", "status": "completed", "uid": "done-1"},
+        {"summary": "Milch", "description": "4 Stück", "status": "completed", "uid": "done-2"},
+        {"summary": "Milch", "description": "4 Stück", "status": "needs_action", "uid": "open"},
+    ]
+
+    assert syncer._duplicate_cleanup_plan("todo.a", raw) == []
+
+
+def test_duplicate_cleanup_requires_unique_uid_for_extra_entry(syncer):
+    syncer._supports_description = lambda _entity_id: True
+    raw = [
+        {"summary": "Milch", "description": "4 Stück", "status": "needs_action", "uid": "same"},
+        {"summary": "Milch", "description": "4 Stück", "status": "needs_action", "uid": "same"},
+    ]
+
+    with pytest.raises(_DuplicateCleanupError, match="duplicate_without_unique_uid"):
+        syncer._duplicate_cleanup_plan("todo.a", raw)
+
+
+@pytest.mark.asyncio
+async def test_duplicate_cleanup_verification_failure_aborts(syncer):
+    syncer._call = AsyncMock()
+    syncer._fetch = AsyncMock(return_value=[
+        {"summary": "Milch", "description": "4 Stück", "status": "needs_action", "uid": "duplicate"}
+    ])
+
+    with pytest.raises(_DuplicateCleanupError, match="duplicate_update_not_reflected"):
+        await syncer._cleanup_duplicate_uids("todo.a", [], ["duplicate"])
+
+
+@pytest.mark.asyncio
+async def test_sync_runs_duplicate_cleanup_before_three_way_diff(syncer):
+    syncer.remove_duplicates = True
+    syncer._supports_description = lambda _entity_id: True
+    first_a = [
+        {"summary": "Milch", "description": "4 Stück", "status": "needs_action", "uid": "keep"},
+        {"summary": "Milch", "description": "4 Stück", "status": "needs_action", "uid": "duplicate"},
+    ]
+    first_b = []
+    refreshed_a = [
+        first_a[0],
+        {**first_a[1], "status": "completed"},
+    ]
+    syncer._fetch = AsyncMock(side_effect=[first_a, first_b, refreshed_a])
+    syncer._call = AsyncMock()
+    syncer._apply = AsyncMock()
+
+    await syncer._sync("todo.a")
+
+    syncer._call.assert_awaited_once_with(
+        "update_item",
+        {"entity_id": "todo.a", "item": "duplicate", "status": "completed"},
+    )
+    assert [call.args for call in syncer._fetch.await_args_list] == [
+        ("todo.a",),
+        ("todo.b",),
+        ("todo.a",),
+    ]
+    syncer._apply.assert_awaited_once()
+    applied_item = syncer._apply.await_args.args[3]
+    assert applied_item["status"] == "needs_action"
+    assert applied_item["uid"] == "keep"
+
+
+def test_duplicate_cleanup_is_disabled_by_default(syncer):
+    assert syncer.remove_duplicates is False
+
+
+def test_duplicate_cleanup_parses_title_only_provider_identity(syncer):
+    syncer._supports_description = lambda _entity_id: False
+    raw = [
+        {"summary": "Milch 4 Stück", "status": "needs_action", "uid": "one"},
+        {"summary": "Milch 4 Stück", "status": "needs_action", "uid": "two"},
+        {"summary": "Pizza 4 Käse", "status": "needs_action", "uid": "pizza-a"},
+        {"summary": "Pizza 4 Stagioni", "status": "needs_action", "uid": "pizza-b"},
+    ]
+
+    assert syncer._duplicate_cleanup_plan("todo.a", raw) == ["two"]
+
+
+@pytest.mark.asyncio
+async def test_duplicate_cleanup_without_duplicates_makes_no_extra_calls(syncer):
+    raw = [{"summary": "Milch", "status": "needs_action", "uid": "one"}]
+    syncer._call = AsyncMock()
+    syncer._fetch = AsyncMock()
+
+    result = await syncer._cleanup_duplicate_uids("todo.a", raw, [])
+
+    assert result is raw
+    syncer._call.assert_not_awaited()
+    syncer._fetch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_duplicate_cleanup_preflights_both_lists_before_writing(syncer):
+    syncer.remove_duplicates = True
+    syncer._supports_description = lambda _entity_id: True
+    syncer._fetch = AsyncMock(side_effect=[
+        [
+            {"summary": "Milch", "description": "4 Stück", "status": "needs_action", "uid": "keep"},
+            {"summary": "Milch", "description": "4 Stück", "status": "needs_action", "uid": "extra"},
+        ],
+        [
+            {"summary": "Brot", "description": "", "status": "needs_action"},
+            {"summary": "Brot", "description": "", "status": "needs_action"},
+        ],
+    ])
+    syncer._call = AsyncMock()
+
+    with pytest.raises(_DuplicateCleanupError):
+        await syncer._sync("todo.a")
+
+    syncer._call.assert_not_awaited()

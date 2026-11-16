@@ -56,6 +56,7 @@ A few behaviors are intentional:
 - Completed items are treated as provider history and are not recreated or deleted on the other list when absent there.
 - If a list appears completely empty while the snapshot still contains open items, synchronization is held back for six minutes to guard against a transient or incomplete provider read. If the list is still empty after that confirmation window, the empty result is accepted. Partial deletions are synchronized immediately; there is no item-count or percentage threshold.
 - Read and write failures are retried with bounded exponential backoff, starting at 30 seconds and capped at 300 seconds. Failed item writes keep their previous snapshot value so the next run can detect and retry the outstanding change.
+- Optional duplicate cleanup runs before the three-way diff. It groups open entries by the same normalized name/details identity and marks extras completed by unique provider UID. It must validate both lists before writing, verify changed lists with a follow-up read, and abort the sync run if cleanup cannot be completed safely. Do not add reads when no duplicates are found.
 
 Please preserve these safety properties when changing the synchronization flow. Add a regression test whenever a change affects conflict resolution, deletion handling, snapshots, or retries.
 
