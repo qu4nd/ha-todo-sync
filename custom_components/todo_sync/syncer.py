@@ -22,6 +22,7 @@ from .const import (
     CONF_INTERVAL,
     CONF_LIST_A,
     CONF_LIST_B,
+    CONF_REMOVE_DUPLICATES,
     DEBOUNCE_SECONDS,
     DOMAIN,
     DONE,
@@ -54,6 +55,15 @@ class _TodoListReadError(Exception):
     """Raised when fetching either source list fails before sync changes are applied."""
 
 
+class _DuplicateCleanupError(Exception):
+    """Raised when duplicate cleanup cannot be completed safely."""
+
+    def __init__(self, entity_id: str, reason: str) -> None:
+        super().__init__(reason)
+        self.entity_id = entity_id
+        self.reason = reason
+
+
 class _InvalidItemIdentityError(ValueError):
     """Raised when provider data cannot produce a safe, stable item identity."""
 
@@ -71,6 +81,7 @@ class TodoSyncer:
         self.a: str = entry.data[CONF_LIST_A]
         self.b: str = entry.data[CONF_LIST_B]
         self.interval: int = int(entry.options.get(CONF_INTERVAL, SCAN_INTERVAL_MINUTES))
+        self.remove_duplicates = bool(entry.options.get(CONF_REMOVE_DUPLICATES, False))
         self._store = TodoSyncStorage(hass, f"{DOMAIN}.{entry.entry_id}")
         self._lock = asyncio.Lock()
         # Last successfully synchronized state, keyed by normalized name + description.
@@ -273,6 +284,21 @@ class TodoSyncer:
                     synced_items=0,
                 )
                 self._schedule_retry(trigger, "read_failure")
+            except _DuplicateCleanupError as err:
+                _LOGGER.error(
+                    "sync_event=duplicate_cleanup_failed category=duplicate_cleanup_failure "
+                    "list=%s reason=%s",
+                    self._list_side(err.entity_id),
+                    err.reason,
+                )
+                await self._set_status(
+                    SyncState.ERROR,
+                    last_error=self._now(),
+                    last_error_type="DuplicateCleanupError",
+                    synced_items=0,
+                )
+                if err.reason != "duplicate_without_unique_uid":
+                    self._schedule_retry(trigger, "duplicate_cleanup_failure")
             except _InvalidItemIdentityError as err:
                 _LOGGER.error(
                     "sync_event=invalid_identity category=invalid_identity "
@@ -342,6 +368,64 @@ class TodoSyncer:
         )
         return resp[entity_id]["items"]
 
+    def _duplicate_cleanup_plan(self, entity_id: str, raw: list[dict]) -> list[str]:
+        """Return the UIDs of extra open occurrences, grouped by logical identity."""
+        supports = self._supports_description(entity_id)
+        groups: dict[ItemKey, list[dict]] = {}
+        uid_counts: dict[str, int] = {}
+        for item in raw:
+            if not isinstance(item, dict):
+                raise _InvalidItemIdentityError(entity_id, "invalid_item_record")
+            uid = item.get("uid")
+            if isinstance(uid, str) and uid:
+                uid_counts[uid] = uid_counts.get(uid, 0) + 1
+            if item.get("status") != OPEN:
+                continue
+            summary = item.get("summary")
+            if not isinstance(summary, str) or not summary.strip():
+                raise _InvalidItemIdentityError(entity_id, "missing_or_empty_summary")
+            description = item.get("description")
+            if description is None:
+                description = ""
+            if not isinstance(description, str):
+                raise _InvalidItemIdentityError(entity_id, "invalid_description")
+            name, details = summary.strip(), description.strip()
+            if not supports:
+                name, details = self._split_title(name)
+            if name:
+                groups.setdefault(_identity(name, details), []).append(item)
+
+        duplicates: list[str] = []
+        for occurrences in groups.values():
+            for duplicate in occurrences[1:]:
+                uid = duplicate.get("uid")
+                if not isinstance(uid, str) or not uid or uid_counts.get(uid) != 1:
+                    raise _DuplicateCleanupError(entity_id, "duplicate_without_unique_uid")
+                duplicates.append(uid)
+        return duplicates
+
+    async def _cleanup_duplicate_uids(
+        self, entity_id: str, raw: list[dict], duplicate_uids: list[str]
+    ) -> list[dict]:
+        """Complete extra open duplicates by UID and verify the provider reflects it."""
+        if not duplicate_uids:
+            return raw
+        try:
+            for uid in duplicate_uids:
+                await self._call(
+                    "update_item",
+                    {"entity_id": entity_id, "item": uid, "status": DONE},
+                )
+            refreshed = await self._fetch(entity_id)
+        except Exception as err:  # noqa: BLE001
+            raise _DuplicateCleanupError(entity_id, "duplicate_update_failed") from err
+
+        for uid in duplicate_uids:
+            matches = [item for item in refreshed if item.get("uid") == uid]
+            if len(matches) > 1 or (matches and matches[0].get("status") != DONE):
+                raise _DuplicateCleanupError(entity_id, "duplicate_update_not_reflected")
+        return refreshed
+
     def _parse(self, entity_id: str, raw: list[dict]) -> dict[ItemKey, TodoItem]:
         items: dict[ItemKey, TodoItem] = {}
         supports = self._supports_description(entity_id)
@@ -371,7 +455,14 @@ class TodoSyncer:
                 }
                 if item.get("uid"):
                     parsed_item["uid"] = item["uid"]
-                items[_identity(name, desc)] = parsed_item
+                key = _identity(name, desc)
+                existing = items.get(key)
+                # Open entries are active list content; completed entries are history.
+                # If both exist, never let the history record hide the open entry.
+                if existing is None or (
+                    existing["status"] == DONE and parsed_item["status"] == OPEN
+                ):
+                    items[key] = parsed_item
         return items
 
     @staticmethod
@@ -623,6 +714,20 @@ class TodoSyncer:
         # both fields identically on every provider.
         items_a = self._parse(self.a, raw_a)
         items_b = self._parse(self.b, raw_b)
+        # Completed provider records are history, not active list content. Keep
+        # them in the comparison only when the last common snapshot says the item
+        # was open; that is the one case where completion is a real state change.
+        previously_open = {
+            key for key, item in self._snapshot.items() if item["status"] == OPEN
+        }
+        items_a = {
+            key: item for key, item in items_a.items()
+            if item["status"] != DONE or key in previously_open
+        }
+        items_b = {
+            key: item for key, item in items_b.items()
+            if item["status"] != DONE or key in previously_open
+        }
         self._resolve_pending_writes(items_a, items_b)
         return items_a, items_b
 
@@ -668,6 +773,7 @@ class TodoSyncer:
         source, dest_id, dest_items = (
             (a, self.b, items_b) if from_a else (b, self.a, items_a)
         )
+
         dest = dest_items.get(key)
         source_side = "A" if from_a else "B"
         destination_side = self._list_side(dest_id)
@@ -725,6 +831,12 @@ class TodoSyncer:
         # Read both lists completely before applying anything. A failed read must
         # never be interpreted as an empty list or advance the persisted snapshot.
         raw_a, raw_b = await self._read_lists()
+        if self.remove_duplicates:
+            # Validate both lists before making any cleanup writes.
+            duplicates_a = self._duplicate_cleanup_plan(self.a, raw_a)
+            duplicates_b = self._duplicate_cleanup_plan(self.b, raw_b)
+            raw_a = await self._cleanup_duplicate_uids(self.a, raw_a, duplicates_a)
+            raw_b = await self._cleanup_duplicate_uids(self.b, raw_b, duplicates_b)
         items_a, items_b = self._prepare_items(raw_a, raw_b)
 
         # A completely empty list can be a transient provider/API read failure.
@@ -734,7 +846,12 @@ class TodoSyncer:
             return False
 
         self._last_synced_items = 0
-        snapshot = self._snapshot
+        # A completed snapshot is no longer active list content. Only an open
+        # baseline is needed to recognize a genuine open -> completed transition.
+        snapshot = {
+            key: item for key, item in self._snapshot.items()
+            if item["status"] == OPEN
+        }
         trigger_side = (
             "A" if trigger == self.a else "B" if trigger == self.b else "periodic"
         )

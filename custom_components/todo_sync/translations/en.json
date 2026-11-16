@@ -42,7 +42,8 @@
       "init": {
         "title": "To-do Sync",
         "data": {
-          "interval": "Sync interval (minutes)"
+          "interval": "Sync interval (minutes)",
+          "remove_duplicates": "Remove duplicate open items before each sync"
         }
       }
     }
