@@ -65,7 +65,7 @@ Lists like **Bring!** store the item name and its details separately, whereas **
 ## 📦 Installation
 
 > [!IMPORTANT]
-> Requires **Home Assistant 2026.11.0** or newer (tested on **2026.11.1**) and at least two existing `todo` entities.
+> Tested with **Home Assistant 2026.11.0** and newer (probably working on older versions though). Requires at least two existing `todo` entities.
 
 ### Option 1: Marketplace / HACS (Recommended)
 
