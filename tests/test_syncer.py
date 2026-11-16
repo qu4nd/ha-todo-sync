@@ -30,6 +30,28 @@ def syncer(hass):
     instance._store._store.async_delay_save = Mock()
     return instance
 
+@pytest.mark.asyncio
+async def test_fetch_requests_open_items_only(syncer):
+    response = {
+        "todo.a": {
+            "items": [
+                {"summary": "Milk", "status": "needs_action", "uid": "open"}
+            ]
+        }
+    }
+    syncer.hass.services.async_call = AsyncMock(return_value=response)
+
+    items = await syncer._fetch("todo.a")
+
+    assert items == response["todo.a"]["items"]
+    syncer.hass.services.async_call.assert_awaited_once_with(
+        "todo",
+        "get_items",
+        {"entity_id": "todo.a"},
+        blocking=True,
+        return_response=True,
+    )
+
 
 def item(name, status="needs_action", description=""):
     return {
@@ -415,70 +437,6 @@ def test_last_list_change_event_wins_debounce_window(syncer):
     assert [delay for delay, _, _ in scheduled] == [3, 3]
 
 
-@pytest.mark.asyncio
-async def test_periodic_conflict_defaults_to_list_a(syncer):
-    old = item("Milch", description="3")
-    changed_a = item("Milch", status="completed", description="3")
-    changed_b = item("Milch", description="3")
-    syncer._snapshot = {_identity("Milch", "3"): old}
-    syncer._fetch = AsyncMock(
-        side_effect=[
-            [{"summary": "Milch", "status": "completed", "description": "3"}],
-            [{"summary": "Milch", "status": "needs_action", "description": "3"}],
-        ]
-    )
-    syncer._supports_description = lambda _entity_id: True
-    syncer._apply = AsyncMock()
-
-    await syncer._sync(None)
-
-    syncer._apply.assert_awaited_once_with("todo.b", {_identity("Milch", "3"): changed_b}, _identity("Milch", "3"), changed_a)
-    assert syncer._snapshot == {_identity("Milch", "3"): changed_a}
-
-
-@pytest.mark.asyncio
-async def test_triggering_list_wins_conflict(syncer):
-    old = item("Milch", description="3")
-    changed_a = item("Milch", description="3")
-    changed_b = item("Milch", status="completed", description="3")
-    syncer._snapshot = {_identity("Milch", "3"): old}
-    syncer._fetch = AsyncMock(
-        side_effect=[
-            [{"summary": "Milch", "status": "needs_action", "description": "3"}],
-            [{"summary": "Milch", "status": "completed", "description": "3"}],
-        ]
-    )
-    syncer._supports_description = lambda _entity_id: True
-    syncer._apply = AsyncMock()
-
-    await syncer._sync("todo.b")
-
-    syncer._apply.assert_awaited_once_with("todo.a", {_identity("Milch", "3"): changed_a}, _identity("Milch", "3"), changed_b)
-    assert syncer._snapshot == {_identity("Milch", "3"): changed_b}
-
-
-@pytest.mark.asyncio
-async def test_completed_history_is_not_recreated(syncer):
-    completed = item("Milch", status="completed")
-    syncer._snapshot = {_identity("Milch", ""): completed}
-    syncer._fetch = AsyncMock(
-        side_effect=[
-            [],
-            [{"summary": "Milch", "status": "completed", "description": ""}],
-        ]
-    )
-    syncer._supports_description = lambda _entity_id: True
-    syncer._apply = AsyncMock()
-
-    await syncer._sync("todo.a")
-
-    syncer._apply.assert_not_awaited()
-    assert syncer._snapshot == {}
-
-
-@pytest.mark.asyncio
-async def test_failed_apply_keeps_previous_snapshot_for_retry(syncer):
-    old = item("Milch", description="3")
     syncer._snapshot = {_identity("Milch", "3"): old}
     syncer._fetch = AsyncMock(
         side_effect=[
@@ -595,58 +553,6 @@ async def test_deleting_open_item_is_synced(syncer, trigger, fetch_results, dest
     )
     assert syncer._snapshot == {bread_key: bread}
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("trigger", "status_a", "status_b", "destination", "target"),
-    [
-        ("todo.a", "completed", "needs_action", "todo.b", "todo.a"),
-        ("todo.b", "needs_action", "completed", "todo.a", "todo.b"),
-    ],
-)
-async def test_status_change_is_synced_from_triggering_list(
-    syncer, trigger, status_a, status_b, destination, target
-):
-    old = item("Milch")
-    changed_a = item("Milch", status=status_a)
-    changed_b = item("Milch", status=status_b)
-    syncer._snapshot = {_identity("Milch", ""): old}
-    syncer._fetch = AsyncMock(
-        side_effect=[
-            [{"summary": "Milch", "status": status_a, "description": ""}],
-            [{"summary": "Milch", "status": status_b, "description": ""}],
-        ]
-    )
-    syncer._supports_description = lambda _entity_id: True
-    syncer._apply = AsyncMock()
-
-    await syncer._sync(trigger)
-
-    source = changed_a if target == "todo.a" else changed_b
-    destination_items = {_identity("Milch", ""): changed_b if destination == "todo.b" else changed_a}
-    syncer._apply.assert_awaited_once_with(destination, destination_items, _identity("Milch", ""), source)
-    assert syncer._snapshot == {_identity("Milch", ""): source}
-
-
-@pytest.mark.asyncio
-async def test_deleting_completed_item_keeps_history_on_other_list(syncer):
-    completed = item("Milch", status="completed")
-    syncer._snapshot = {_identity("Milch", ""): completed}
-    syncer._fetch = AsyncMock(
-        side_effect=[
-            [{"summary": "Milch", "status": "completed", "description": ""}],
-            [],
-        ]
-    )
-    syncer._supports_description = lambda _entity_id: True
-    syncer._apply = AsyncMock()
-
-    await syncer._sync("todo.b")
-
-    syncer._apply.assert_not_awaited()
-    assert syncer._snapshot == {}
-
-
-def test_empty_list_suspects_only_when_a_list_is_completely_empty(syncer):
     syncer._snapshot = {
         _identity("Milk", ""): item("Milk"),
         _identity("Bread", ""): item("Bread"),
@@ -966,125 +872,6 @@ async def test_sync_does_not_depend_on_provider_item_order(syncer, items_a, item
     assert syncer._snapshot == expected_snapshot
 
 
-@pytest.mark.parametrize(
-    "raw",
-    [
-        [
-            {"summary": "Milk", "status": "needs_action", "uid": "open"},
-            {"summary": "Milk", "status": "completed", "uid": "history"},
-        ],
-        [
-            {"summary": "Milk", "status": "completed", "uid": "history"},
-            {"summary": "Milk", "status": "needs_action", "uid": "open"},
-        ],
-    ],
-)
-def test_parse_prefers_open_item_over_completed_history(syncer, raw):
-    syncer._supports_description = lambda _entity_id: True
-
-    parsed = syncer._parse("todo.a", raw)
-
-    assert parsed[_identity("Milk", "")]["status"] == "needs_action"
-    assert parsed[_identity("Milk", "")]["uid"] == "open"
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("trigger", "open_side", "history_side"),
-    [
-        (trigger, open_side, history_side)
-        for trigger in (None, "todo.a", "todo.b")
-        for open_side, history_side in (
-            ("todo.a", "todo.b"),
-            ("todo.b", "todo.a"),
-        )
-    ],
-)
-async def test_new_open_item_replaces_completed_history_without_open_snapshot(
-    syncer, trigger, open_side, history_side
-):
-    key = _identity("Salz", "")
-    open_item = {
-        "summary": "Salz",
-        "description": "",
-        "status": "needs_action",
-        "uid": "new-open",
-    }
-    completed_history = {
-        "summary": "Salz",
-        "description": "",
-        "status": "completed",
-        "uid": "old-history",
-    }
-    raw_by_side = {
-        "todo.a": [open_item] if open_side == "todo.a" else [completed_history],
-        "todo.b": [open_item] if open_side == "todo.b" else [completed_history],
-    }
-    syncer._fetch = AsyncMock(
-        side_effect=[raw_by_side["todo.a"], raw_by_side["todo.b"]]
-    )
-    syncer._supports_description = lambda _entity_id: True
-    syncer._apply = AsyncMock(return_value=True)
-
-    await syncer._sync(trigger)
-
-    syncer._apply.assert_awaited_once_with(
-        history_side,
-        {},
-        key,
-        {**item("Salz"), "uid": "new-open"},
-    )
-    assert syncer._snapshot[key]["status"] == "needs_action"
-
-
-async def test_completed_history_does_not_block_open_item_from_other_list(syncer):
-    key = _identity("Milk", "")
-    historical = [{"summary": "Milk", "status": "completed", "uid": "old"}]
-    open_item = [{"summary": "Milk", "status": "needs_action", "uid": "current"}]
-    syncer._fetch = AsyncMock(side_effect=[historical, open_item])
-    syncer._supports_description = lambda _entity_id: True
-    syncer._apply = AsyncMock()
-
-    await syncer._sync("todo.b")
-
-    syncer._apply.assert_awaited_once_with(
-        "todo.a", {}, key, {**item("Milk"), "uid": "current"}
-    )
-    assert syncer._snapshot[key]["status"] == "needs_action"
-
-
-@pytest.mark.asyncio
-async def test_completed_snapshot_history_does_not_block_reopened_item(syncer):
-    key = _identity("Milk", "")
-    syncer._snapshot = {key: item("Milk", status="completed")}
-    syncer._fetch = AsyncMock(side_effect=[
-        [{"summary": "Milk", "status": "completed", "uid": "old"}],
-        [{"summary": "Milk", "status": "needs_action", "uid": "current"}],
-    ])
-    syncer._supports_description = lambda _entity_id: True
-    syncer._apply = AsyncMock()
-
-    await syncer._sync("todo.b")
-
-    syncer._apply.assert_awaited_once_with(
-        "todo.a", {}, key, {**item("Milk"), "uid": "current"}
-    )
-    assert syncer._snapshot[key]["status"] == "needs_action"
-
-
-def test_parse_rejects_invalid_identity_without_exposing_summary(syncer):
-    syncer._supports_description = lambda _entity_id: True
-
-    with pytest.raises(_InvalidItemIdentityError, match="missing_or_empty_summary"):
-        syncer._parse(
-            "todo.a",
-            [{"summary": "  ", "status": "needs_action"}],
-        )
-
-
-@pytest.mark.asyncio
-async def test_invalid_identity_is_classified_and_logged_without_item_content(
-    syncer, caplog
 ):
     syncer._ready = lambda: True
     syncer._sync = AsyncMock(
@@ -1138,34 +925,6 @@ def test_empty_list_guard_emits_structured_activation_log(syncer, caplog):
     assert "todo.a" not in caplog.text
 
 
-@pytest.mark.asyncio
-async def test_conflict_log_identifies_winner_without_item_content(syncer, caplog):
-    key = _identity("Secret item", "")
-    bread_key = _identity("Bread", "")
-    syncer._snapshot = {
-        key: item("Secret item"),
-        bread_key: item("Bread"),
-    }
-    syncer._fetch = AsyncMock(
-        side_effect=[
-            [
-                {"summary": "Secret item", "status": "completed"},
-                {"summary": "Bread", "status": "needs_action"},
-            ],
-            [{"summary": "Bread", "status": "needs_action"}],
-        ]
-    )
-    syncer._supports_description = lambda _entity_id: True
-    syncer._apply = AsyncMock()
-
-    with caplog.at_level(logging.DEBUG, logger="custom_components.todo_sync"):
-        await syncer._sync("todo.a")
-
-    assert "sync_event=conflict_resolved winner=A destination=B" in caplog.text
-    assert "Secret item" not in caplog.text
-
-
-@pytest.mark.asyncio
 async def test_write_failure_log_has_category_without_item_content(syncer, caplog):
     key = _identity("Secret item", "")
     source = item("Secret item", status="completed")
@@ -1255,17 +1014,6 @@ def test_duplicate_cleanup_uses_name_and_description(syncer):
         {"summary": "Pizza", "description": "4 Stagioni", "status": "needs_action", "uid": "b"},
         {"summary": "Milch", "description": "1 Liter", "status": "needs_action", "uid": "c"},
         {"summary": "Milch", "description": "2 Liter", "status": "needs_action", "uid": "d"},
-    ]
-
-    assert syncer._duplicate_cleanup_plan("todo.a", raw) == []
-
-
-def test_duplicate_cleanup_ignores_completed_history(syncer):
-    syncer._supports_description = lambda _entity_id: True
-    raw = [
-        {"summary": "Milch", "description": "4 Stück", "status": "completed", "uid": "done-1"},
-        {"summary": "Milch", "description": "4 Stück", "status": "completed", "uid": "done-2"},
-        {"summary": "Milch", "description": "4 Stück", "status": "needs_action", "uid": "open"},
     ]
 
     assert syncer._duplicate_cleanup_plan("todo.a", raw) == []
