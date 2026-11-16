@@ -999,7 +999,9 @@ async def test_completed_history_does_not_block_open_item_from_other_list(syncer
 
     await syncer._sync("todo.b")
 
-    syncer._apply.assert_awaited_once_with("todo.a", {}, key, item("Milk"))
+    syncer._apply.assert_awaited_once_with(
+        "todo.a", {}, key, {**item("Milk"), "uid": "current"}
+    )
     assert syncer._snapshot[key]["status"] == "needs_action"
 
 
@@ -1016,7 +1018,9 @@ async def test_completed_snapshot_history_does_not_block_reopened_item(syncer):
 
     await syncer._sync("todo.b")
 
-    syncer._apply.assert_awaited_once_with("todo.a", {}, key, item("Milk"))
+    syncer._apply.assert_awaited_once_with(
+        "todo.a", {}, key, {**item("Milk"), "uid": "current"}
+    )
     assert syncer._snapshot[key]["status"] == "needs_action"
 
 
