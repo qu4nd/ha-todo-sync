@@ -774,20 +774,30 @@ class TodoSyncer:
             (a, self.b, items_b) if from_a else (b, self.a, items_a)
         )
 
-        # An explicit change event on an open list is stronger than a matching
-        # completed provider-history record on the other list. Treat that history
-        # as absent so the newly opened item is created with a fresh provider UID.
-        if trigger == self.a and a is not None and a["status"] == OPEN and (
-            b is not None and b["status"] == DONE
+        # Completed provider-history records are not active list content. If
+        # there is no triggering event to establish that the completion was a
+        # deliberate user action, prefer the still-open item and recreate it on
+        # the other side. An explicit open-item event has the same precedence.
+        # Explicit completion events still flow through the normal three-way diff.
+        if (
+            a is not None
+            and a["status"] == OPEN
+            and b is not None
+            and b["status"] == DONE
+            and trigger in (None, self.a)
         ):
             from_a = True
             source, dest_id, dest_items = a, self.b, items_b
             dest_items.pop(key, None)
-        elif trigger == self.b and b is not None and b["status"] == OPEN and (
-            a is not None and a["status"] == DONE
+        elif (
+            b is not None
+            and b["status"] == OPEN
+            and a is not None
+            and a["status"] == DONE
+            and trigger in (None, self.b)
         ):
             from_a = False
-            source, dest_id, dest_items = b, self.a, items_a
+            source, dest_id, dest_items = b, self.a, items_b
             dest_items.pop(key, None)
 
         dest = dest_items.get(key)
