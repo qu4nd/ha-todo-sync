@@ -992,56 +992,18 @@ def test_parse_prefers_open_item_over_completed_history(syncer, raw):
 @pytest.mark.parametrize(
     ("trigger", "open_side", "history_side"),
     [
-        ("todo.a", "todo.a", "todo.b"),
-        ("todo.b", "todo.b", "todo.a"),
+        (trigger, open_side, history_side)
+        for trigger in (None, "todo.a", "todo.b")
+        for open_side, history_side in (
+            ("todo.a", "todo.b"),
+            ("todo.b", "todo.a"),
+        )
     ],
 )
-async def test_triggered_new_open_item_replaces_completed_history_even_with_open_snapshot(
+async def test_new_open_item_replaces_completed_history_without_open_snapshot(
     syncer, trigger, open_side, history_side
 ):
     key = _identity("Salz", "")
-    syncer._snapshot = {key: item("Salz", status="needs_action")}
-    open_item = {"summary": "Salz", "description": "", "status": "needs_action", "uid": "new-open"}
-    completed_history = {
-        "summary": "Salz",
-        "description": "",
-        "status": "completed",
-        "uid": "old-history",
-    }
-    raw_by_side = {
-        "todo.a": [open_item] if open_side == "todo.a" else [completed_history],
-        "todo.b": [open_item] if open_side == "todo.b" else [completed_history],
-    }
-    syncer._fetch = AsyncMock(side_effect=[raw_by_side["todo.a"], raw_by_side["todo.b"]])
-    syncer._supports_description = lambda _entity_id: True
-    syncer._apply = AsyncMock(return_value=True)
-
-    await syncer._sync(trigger)
-
-    destination = history_side
-    syncer._apply.assert_awaited_once_with(
-        destination,
-        {},
-        key,
-        {**item("Salz"), "uid": "new-open"},
-    )
-    assert syncer._snapshot[key]["status"] == "needs_action"
-
-
-@pytest.mark.asyncio
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("open_side", "history_side"),
-    [
-        ("todo.a", "todo.b"),
-        ("todo.b", "todo.a"),
-    ],
-)
-async def test_periodic_sync_prefers_open_item_over_completed_history_with_open_snapshot(
-    syncer, open_side, history_side
-):
-    key = _identity("Salz", "")
-    syncer._snapshot = {key: item("Salz", status="needs_action")}
     open_item = {
         "summary": "Salz",
         "description": "",
@@ -1058,11 +1020,13 @@ async def test_periodic_sync_prefers_open_item_over_completed_history_with_open_
         "todo.a": [open_item] if open_side == "todo.a" else [completed_history],
         "todo.b": [open_item] if open_side == "todo.b" else [completed_history],
     }
-    syncer._fetch = AsyncMock(side_effect=[raw_by_side["todo.a"], raw_by_side["todo.b"]])
+    syncer._fetch = AsyncMock(
+        side_effect=[raw_by_side["todo.a"], raw_by_side["todo.b"]]
+    )
     syncer._supports_description = lambda _entity_id: True
     syncer._apply = AsyncMock(return_value=True)
 
-    await syncer._sync(None)
+    await syncer._sync(trigger)
 
     syncer._apply.assert_awaited_once_with(
         history_side,
