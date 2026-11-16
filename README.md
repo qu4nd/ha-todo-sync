@@ -143,7 +143,7 @@ actions:
 
 ---
 
-## ⚠️ Conflict Resolution & Limitations
+## ⚠️ Synchronization Details & Limitations
 
 ### Provider write delays
 
