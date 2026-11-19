@@ -112,7 +112,7 @@ No YAML is required. Advanced users can still configure the card manually:
 
 ```yaml
 type: custom:ha-todo-card
-entity: todo.your_list
+entity: todo.YOUR_LIST
 display: list
 show_completed: false
 show_details: true
