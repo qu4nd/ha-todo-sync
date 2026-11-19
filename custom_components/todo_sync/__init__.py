@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 from homeassistant.components.frontend import add_extra_js_url
@@ -14,20 +15,23 @@ from .syncer import TodoSyncer
 
 PLATFORMS = ["button", "sensor"]
 _CARD_REGISTERED = f"{DOMAIN}_card_registered"
+_CARD_LOCK = f"{DOMAIN}_card_registration_lock"
 _CARD_URL = "/api/todo_sync/ha-todo-card.js"
 
 
 async def _async_register_card(hass: HomeAssistant) -> None:
     """Serve and register the Lovelace card once per Home Assistant instance."""
-    if hass.data.get(_CARD_REGISTERED):
-        return
+    lock = hass.data.setdefault(_CARD_LOCK, asyncio.Lock())
+    async with lock:
+        if hass.data.get(_CARD_REGISTERED):
+            return
 
-    card_path = Path(__file__).parent / "www" / "ha-todo-card.js"
-    await hass.http.async_register_static_paths(
-        [StaticPathConfig(_CARD_URL, str(card_path), False)]
-    )
-    add_extra_js_url(hass, _CARD_URL)
-    hass.data[_CARD_REGISTERED] = True
+        card_path = Path(__file__).parent / "www" / "ha-todo-card.js"
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(_CARD_URL, str(card_path), False)]
+        )
+        add_extra_js_url(hass, _CARD_URL)
+        hass.data[_CARD_REGISTERED] = True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
