@@ -62,7 +62,7 @@ class HaTodoCard extends LitElement {
       align-items: flex-start;
       gap: 12px;
       min-width: 0;
-      padding: 10px 12px;
+      padding: 0;
       border: 1px solid var(--divider-color);
       border-radius: 12px;
       background: var(--card-background-color);
@@ -70,6 +70,18 @@ class HaTodoCard extends LitElement {
 
     .item.completed {
       opacity: 0.68;
+    }
+
+    .item-label {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      width: 100%;
+      min-width: 0;
+      min-height: 44px;
+      padding: 10px 12px;
+      box-sizing: border-box;
+      cursor: pointer;
     }
 
     .item input[type="checkbox"] {
@@ -387,6 +399,7 @@ class HaTodoCard extends LitElement {
 
     return html`
       <li class="item ${completed ? "completed" : ""}">
+        <label class="item-label">
         <input
           type="checkbox"
           .checked=${completed}
@@ -405,6 +418,7 @@ class HaTodoCard extends LitElement {
               `
             : nothing}
         </div>
+        </label>
       </li>
     `;
   }
