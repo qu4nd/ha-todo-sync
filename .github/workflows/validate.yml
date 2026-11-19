@@ -102,6 +102,8 @@ jobs:
         run: uv pip install --system -r requirements_test.txt
       - name: Run Ruff
         run: ruff check .
+      - name: Check Lovelace card JavaScript syntax
+        run: node --input-type=module --check < custom_components/todo_sync/www/ha-todo-card.js
       - name: Run unit tests
         env:
           PYTHONPATH: ${{ github.workspace }}

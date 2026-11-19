@@ -94,6 +94,33 @@ Copy the `custom_components/todo_sync` folder into your Home Assistant `<config>
 
 ---
 
+## 🧾 Lovelace To-do Card
+
+To-do Sync also includes a custom Lovelace card for displaying and managing **any Home Assistant `todo` entity**. The card is independent of the two lists selected for synchronization; choose the entity you want to display in the card configuration.
+
+The card is served and registered automatically when a To-do Sync config entry is set up. No separate HACS dashboard plugin or manual Lovelace resource registration is required.
+
+Add it to a dashboard using YAML:
+
+```yaml
+type: custom:ha-todo-card
+entity: todo.zuhause
+display: list
+show_completed: false
+```
+
+| Option | Default | Description |
+| :--- | :--- | :--- |
+| `entity` | Required | The single Home Assistant To-do entity to display. |
+| `display` | `list` | `list` for a compact list or `tiles` for a responsive tile grid. |
+| `show_completed` | `false` | Show completed items as well. Completed items are visually distinct and can be reopened. |
+
+The card displays an item's description and due date only when the corresponding field is present and non-empty. It hides completed items by default and supports adding items and changing their completion status whenever the selected entity exposes the corresponding Home Assistant Todo features.
+
+Updates arrive through Home Assistant's native To-do WebSocket subscription. Adding and updating items use the standard `todo.add_item` and `todo.update_item` actions. The card does not poll providers, call provider APIs directly, or implement any synchronization logic.
+
+---
+
 ## 📊 Synchronization Status
 
 To-do Sync creates a diagnostic sensor for each configured list pair. The sensor is available alongside the integration's other entities and shows the latest synchronization state:
