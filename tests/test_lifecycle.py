@@ -42,6 +42,7 @@ async def test_register_card_once(hass, monkeypatch):
     config = register_static_paths.await_args.args[0][0]
     assert config.url_path == _CARD_URL
     assert Path(config.path).name == "ha-todo-card.js"
+    assert Path(config.path).is_file()
     assert config.cache_headers is False
     add_extra_js_url.assert_called_once_with(hass, _CARD_URL)
 
