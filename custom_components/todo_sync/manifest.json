@@ -10,6 +10,7 @@
   "config_flow": true,
   "dependencies": [
     "frontend",
+    "http",
     "todo"
   ],
   "documentation": "https://github.com/qu4nd/ha-todo-sync",
