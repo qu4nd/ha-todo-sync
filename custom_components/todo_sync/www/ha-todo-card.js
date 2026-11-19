@@ -409,7 +409,9 @@ class HaTodoCard extends HTMLElement {
   }
 }
 
-customElements.define("ha-todo-card", HaTodoCard);
+if (!customElements.get("ha-todo-card")) {
+  customElements.define("ha-todo-card", HaTodoCard);
+}
 
 window.customCards = window.customCards || [];
 window.customCards.push({
