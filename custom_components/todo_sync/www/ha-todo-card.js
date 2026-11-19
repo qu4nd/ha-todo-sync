@@ -11,6 +11,7 @@ class HaTodoCard extends LitElement {
     _loading: { state: true },
     _error: { state: true },
     _newItem: { state: true },
+    _adding: { state: true },
     _busyItems: { state: true },
   };
 
@@ -177,6 +178,7 @@ class HaTodoCard extends LitElement {
     this._loading = true;
     this._error = "";
     this._newItem = "";
+    this._adding = false;
     this._busyItems = new Set();
     this._unsubscribe = undefined;
     this._subscribedConnection = undefined;
@@ -273,6 +275,8 @@ class HaTodoCard extends LitElement {
     } catch (error) {
       if (token === this._subscriptionToken) {
         this._loading = false;
+        this._subscribedConnection = undefined;
+        this._subscribedEntity = undefined;
         this._error = error?.message || "The to-do list could not be loaded.";
       }
     }
@@ -334,6 +338,7 @@ class HaTodoCard extends LitElement {
     }
 
     this._error = "";
+    this._adding = true;
     try {
       await this.hass.callService("todo", "add_item", {
         entity_id: this.config.entity,
@@ -342,6 +347,8 @@ class HaTodoCard extends LitElement {
       this._newItem = "";
     } catch (error) {
       this._error = error?.message || "The item could not be added.";
+    } finally {
+      this._adding = false;
     }
   }
 
@@ -443,8 +450,8 @@ class HaTodoCard extends LitElement {
                       this._newItem = event.target.value;
                     }}
                   />
-                  <button type="submit" ?disabled=${!this._newItem.trim()}>
-                    Add
+                  <button type="submit" ?disabled=${!this._newItem.trim() || this._adding}>
+                    ${this._adding ? "Adding…" : "Add"}
                   </button>
                 </form>
               `
