@@ -30,7 +30,8 @@ def entry():
 async def test_register_card_once(hass, monkeypatch):
     register_static_paths = AsyncMock()
     add_extra_js_url = Mock()
-    monkeypatch.setattr(hass.http, "async_register_static_paths", register_static_paths)
+    http = Mock(async_register_static_paths=register_static_paths)
+    monkeypatch.setattr(hass, "http", http)
     monkeypatch.setattr(
         "custom_components.todo_sync.add_extra_js_url", add_extra_js_url
     )
