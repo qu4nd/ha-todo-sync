@@ -125,7 +125,7 @@ show_details: true
 | `show_completed` | `false` | Show completed entries as well. Completed entries are visually distinct and can be reopened. |
 | `show_details` | `true` | Show descriptions and due dates when the corresponding values are present and non-empty. |
 
-Both layouts use the same neutral entry presentation without item-specific images or icons. New entries use the generic **New item** wording, so the card works equally well for shopping lists and general task lists.
+Both layouts use the same neutral entry presentation without item-specific images or icons. New entries use neutral wording, so the card works equally well for shopping lists and general task lists.
 
 Updates arrive through Home Assistant's native To-do WebSocket subscription. Adding and updating items use the standard `todo.add_item` and `todo.update_item` actions. The card does not poll providers, call provider APIs directly, or implement any synchronization logic.
 
