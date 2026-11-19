@@ -94,43 +94,6 @@ Copy the `custom_components/todo_sync` folder into your Home Assistant `<config>
 
 ---
 
-## 🧾 Lovelace To-do Card
-
-To-do Sync also includes a custom Lovelace card for displaying and managing **any Home Assistant `todo` entity**. The card is independent of the two lists selected for synchronization; choose the entity you want to display in the card configuration.
-
-The card is served and registered automatically when a To-do Sync config entry is set up. No separate HACS dashboard plugin or manual Lovelace resource registration is required.
-
-Add the card directly through the Home Assistant dashboard UI:
-
-1. Open the dashboard and select **Edit dashboard**.
-2. Choose **Add card** and select **To-do Sync Card**.
-3. Select the Todo entity and choose **Kacheln** or **Liste**.
-4. Optionally enable completed entries and/or item details.
-5. Save the card. The same visual editor is available when editing it later.
-
-No YAML is required. Advanced users can still configure the card manually:
-
-```yaml
-type: custom:ha-todo-card
-entity: todo.YOUR_LIST
-display: list
-show_completed: false
-show_details: true
-```
-
-| Option | Default | Description |
-| :--- | :--- | :--- |
-| `entity` | Required | The single Home Assistant To-do entity to display. |
-| `display` | `list` | `list` for compact rows or `tiles` for a responsive tile grid. |
-| `show_completed` | `false` | Show completed entries as well. Completed entries are visually distinct and can be reopened. |
-| `show_details` | `true` | Show descriptions and due dates when the corresponding values are present and non-empty. |
-
-Both layouts use the same neutral entry presentation without item-specific images or icons. New entries use neutral wording, so the card works equally well for shopping lists and general task lists.
-
-Updates arrive through Home Assistant's native To-do WebSocket subscription. Adding and updating items use the standard `todo.add_item` and `todo.update_item` actions. The card does not poll providers, call provider APIs directly, or implement any synchronization logic.
-
----
-
 ## 📊 Synchronization Status
 
 To-do Sync creates a diagnostic sensor for each configured list pair. The sensor is available alongside the integration's other entities and shows the latest synchronization state:
