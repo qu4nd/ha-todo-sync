@@ -8,7 +8,7 @@
 *Purpose-built for **Bring!** ⇄ **Alexa Shopping List**. Designed for Home Assistant To-do entities; compatibility depends on the capabilities and behavior of each provider.*
 
 ![Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fqu4nd%2Fha-todo-sync%2Fmain%2Fcustom_components%2Ftodo_sync%2Fmanifest.json&query=%24.version&label=version&color=blue&style=for-the-badge)
-[![HA Version](https://img.shields.io/badge/Home%20Assistant-2026.11.0%2B-41BDF5?style=for-the-badge&logo=home-assistant&logoColor=white)](https://www.home-assistant.io/)
+[![HA Version](https://img.shields.io/badge/Home%20Assistant-2026.10.0%2B-41BDF5?style=for-the-badge&logo=home-assistant&logoColor=white)](https://www.home-assistant.io/)
 [![IoT Class](https://img.shields.io/badge/IoT%20Class-Local%20Push-success?style=for-the-badge)](https://www.home-assistant.io/blog/2016/02/12/classifying-the-internet-of-things/)
 [![License](https://img.shields.io/github/license/qu4nd/ha-todo-sync?style=for-the-badge)](LICENSE)
 [![Privacy](https://img.shields.io/badge/Privacy-Local%20Only-success?style=for-the-badge&logo=homeassistant&logoColor=white)](#-privacy--your-data-stays-yours)
@@ -21,7 +21,7 @@
 
 ## ✨ Features
 
-* 🔄 **True Two-Way Sync:** Adding, removing, checking, and unchecking items are synced in both directions using a persistent 3-way state snapshot.
+* 🔄 **True Two-Way Sync:** Adding an item or removing/completing an open item on either list is mirrored on the other, using a persistent three-way state snapshot.
 * ⚖️ **Smart Quantity & Details Bridging:** Automatically translates between lists *with* item descriptions (e.g., **Bring!**) and lists *without* them (e.g., **Alexa**). Items with the same name but different details remain separate.
 * ⚡ **Event-Driven + Periodic:** Reacts to Home Assistant list-change events (with a `3 s` debounce) and runs a configurable periodic fallback (`1–1440 min`, default `5 min`). End-to-end sync speed also depends on how quickly each provider updates its Home Assistant entity.
 * 🔘 **Ad-Hoc Sync Button:** Exposes a `Sync now` button entity per list pair for dashboards or custom automations.
@@ -66,7 +66,7 @@ Lists like **Bring!** store the item name and its details separately, whereas **
 ## 📦 Installation
 
 > [!IMPORTANT]
-> Tested with **Home Assistant 2026.11.0** and newer (probably working on older versions though). Requires at least two existing `todo` entities.
+> **Minimum Home Assistant version: 2026.10.0.** The integration is tested with Home Assistant 2026.11.0. Requires at least two existing `todo` entities.
 
 ### Option 1: Marketplace / HACS (Recommended)
 
@@ -76,7 +76,7 @@ Lists like **Bring!** store the item name and its details separately, whereas **
 
 ### Optional beta releases
 
-Stable releases are installed by default. If you want to help test upcoming changes, enable pre-release versions for this repository in HACS. Beta releases are published deliberately for selected changes (for example, `0.1.31b1` and `0.1.31b2`); they are not generated automatically after every merge. Users who do not opt in continue receiving stable releases only. A stable release following a beta series uses the same target version without the beta suffix (for example, `0.1.31`).
+Stable releases are installed by default. If you want to help test upcoming changes, enable pre-release versions for this repository in HACS. Beta releases are published deliberately for selected changes; they are not generated automatically after every merge. Users who do not opt in continue receiving stable releases only. A stable release following a beta series uses the same target version without the beta suffix.
 
 ### Option 2: Manual Installation
 
