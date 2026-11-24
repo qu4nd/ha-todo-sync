@@ -110,6 +110,12 @@ class TodoSyncer:
         data = await self._store.async_load()
         self._snapshot = self._store.migrate_snapshot((data or {}).get("snapshot", {}))
         self._pending_writes = (data or {}).get("pending_writes", {})
+        # Changing title identity changes the keys used by the three-way diff.
+        # Discard the old baseline and pending writes so the next run re-baselines
+        # both live lists instead of interpreting the identity change as deletions.
+        if (data or {}).get("split_title", True) != self.split_title:
+            self._snapshot = {}
+            self._pending_writes = {}
         now = time.time()
         self._pending_writes = {
             key: value for key, value in self._pending_writes.items()
@@ -158,7 +164,10 @@ class TodoSyncer:
 
     def _store_data(self) -> dict:
         return self._store.serialize(
-            self._snapshot, self._pending_writes, self._persisted_status
+            self._snapshot,
+            self._pending_writes,
+            self._persisted_status,
+            split_title=self.split_title,
         )
 
     async def _save_store(self) -> None:
