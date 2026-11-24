@@ -44,7 +44,15 @@ class TodoSyncConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(
                     title=f"{user_input[CONF_LIST_A]} ⇄ {user_input[CONF_LIST_B]}",
-                    data=user_input,
+                    data={
+                        CONF_LIST_A: user_input[CONF_LIST_A],
+                        CONF_LIST_B: user_input[CONF_LIST_B],
+                    },
+                    options={
+                        CONF_INTERVAL: user_input[CONF_INTERVAL],
+                        CONF_REMOVE_DUPLICATES: user_input[CONF_REMOVE_DUPLICATES],
+                        CONF_SPLIT_TITLE: user_input[CONF_SPLIT_TITLE],
+                    },
                 )
         return self.async_show_form(
             step_id="user",
@@ -52,6 +60,23 @@ class TodoSyncConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(CONF_LIST_A): _SELECTOR,
                     vol.Required(CONF_LIST_B): _SELECTOR,
+                    vol.Required(
+                        CONF_INTERVAL, default=SCAN_INTERVAL_MINUTES
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=1,
+                            max=1440,
+                            step=1,
+                            mode=selector.NumberSelectorMode.BOX,
+                            unit_of_measurement="min",
+                        )
+                    ),
+                    vol.Required(
+                        CONF_REMOVE_DUPLICATES, default=False
+                    ): selector.BooleanSelector(),
+                    vol.Required(
+                        CONF_SPLIT_TITLE, default=True
+                    ): selector.BooleanSelector(),
                 }
             ),
             errors=errors,
