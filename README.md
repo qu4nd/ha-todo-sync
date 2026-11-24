@@ -33,6 +33,16 @@
 
 ---
 
+### Tested To-do Lists
+
+| Home Assistant integration | To-do list |
+| :--- | :--- |
+| **Local To-do** | Home Assistant local list |
+| **Bring!** | Bring! shopping list |
+| **Alexa** | Alexa Shopping List |
+| **Mealie** | Mealie shopping list |
+| **CalDAV** | Nextcloud To-do |
+
 ## 🔒 Privacy – Your Data Stays Yours
 
 **To-do Sync runs locally inside your Home Assistant instance.** It does not connect to Bring!, Amazon, or any other provider directly. It only accesses the two Home Assistant `todo` entities you select, using Home Assistant's built-in services.
