@@ -80,4 +80,5 @@ def test_storage_serialization_preserves_existing_snapshot_key_format():
         },
         "status": SyncStatus().to_dict(),
         "pending_writes": {},
+        "split_title": True,
     }

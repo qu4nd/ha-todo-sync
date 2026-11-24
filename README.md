@@ -22,7 +22,7 @@
 ## ✨ Features
 
 * 🔄 **True Two-Way Sync:** Adding an item or removing/completing an open item on either list is mirrored on the other, using a persistent three-way state snapshot.
-* ⚖️ **Smart Quantity & Details Bridging:** Automatically translates between lists *with* item descriptions (e.g., **Bring!**) and lists *without* them (e.g., **Alexa**). Items with the same name but different details remain separate.
+* ⚖️ **Smart Quantity & Details Bridging:** Automatically translates between lists *with* item descriptions (e.g., **Bring!**) and lists *without* them (e.g., **Alexa**). Items with the same name but different details remain separate. Title splitting can be disabled independently for each configured list pair.
 * ⚡ **Event-Driven + Periodic:** Reacts to Home Assistant list-change events (with a `3 s` debounce) and runs a configurable periodic fallback (`1–1440 min`, default `5 min`). End-to-end sync speed also depends on how quickly each provider updates its Home Assistant entity.
 * 🔘 **Ad-Hoc Sync Button:** Exposes a `Sync now` button entity per list pair for dashboards or custom automations.
 * 📊 **Synchronization Status:** Exposes a diagnostic sensor per list pair with the current sync state, last successful sync, last error timestamp, and number of changed items.
@@ -49,9 +49,9 @@ Your existing Home Assistant provider integrations may still communicate with th
 
 ## 🧠 How Item Names & Details Are Bridged
 
-Lists like **Bring!** store the item name and its details separately, whereas **Alexa** only supports a single item title. To make both sides comparable, **To-do Sync** applies one deterministic parsing rule to titles from providers without description support:
+Lists like **Bring!** store the item name and its details separately, whereas **Alexa** only supports a single item title. By default, **To-do Sync** applies one deterministic parsing rule to titles from providers without description support:
 
-**The first word is always the item name; everything after the first space is the detail.** This rule is intentional and does not try to guess whether the remaining text is a quantity, a note, or part of a product name.
+**The first word is always the item name; everything after the first space is the detail.** This rule is intentional and does not try to guess whether the remaining text is a quantity, a note, or part of a product name. If this does not fit your provider data, disable **Split titles into name and description** in that list pair’s Options. The complete title is then kept as the item name.
 
 | Action | Bring! (`todo.list_a`) | ⇄ | Alexa (`todo.alexa_shopping_list`) | How it's handled |
 | :--- | :--- | :---: | :--- | :--- |
@@ -97,8 +97,9 @@ Copy the `custom_components/todo_sync` folder into your Home Assistant `<config>
 [![Open your Home Assistant instance and start setting up a new integration of a specific brand.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=todo_sync)
 
 1. Go to **Settings** → **Devices & services** → **Add integration** → search for **To-do Sync**.
-2. Select **List A** and **List B** (must be two different `todo` entities).
-3. *(Optional)* Click **Configure** on the integration entry to adjust the periodic sync interval (`1–1440 min`) and enable duplicate cleanup. This option is disabled by default. When enabled, To-do Sync checks the currently open items on both lists before each synchronization and marks additional open occurrences of the same logical item as completed, keeping one open occurrence per list. Matching uses the normalized item name and description (case-insensitive; surrounding whitespace is ignored). The cleanup is verified before the normal sync continues; if it cannot be completed or verified safely, that sync run is stopped. Previously completed provider history is not fetched or modified.
+2. Select **List A** and **List B** (must be two different `todo` entities), then configure the synchronization options in the same setup dialog.
+3. The sync interval defaults to `5 minutes` (range `1–1440 min`). Title splitting is enabled by default. Duplicate cleanup is disabled by default; when enabled, To-do Sync checks the currently open items on both lists before each synchronization and marks additional open occurrences of the same logical item as completed, keeping one open occurrence per list. Matching uses the normalized item name and description (case-insensitive; surrounding whitespace is ignored). The cleanup is verified before the normal sync continues; if it cannot be completed or verified safely, that sync run is stopped. Previously completed provider history is not fetched or modified.
+4. You can change all three settings later by clicking **Configure** on the integration entry. They apply only to that configured list pair.
 
 <p align="center">
   <img src="images/configuration.jpg" width="360" alt="To-do Sync configuration dialog showing the two selected to-do lists">
@@ -170,7 +171,7 @@ Snapshots are written only when their persisted data changes. Transient `syncing
 * **Open-List State:** Only open items returned by Home Assistant's `todo.get_items` service are part of the synchronization model. The last common snapshot lets the integration distinguish a newly added item from an item removed on one side. Completing and deleting an item have the same effect here: the item is no longer open and is removed from the other active list as well. Completed-item history is not synchronized.
 * **Renaming Items:** Changing an item's name or description is processed as a deletion of the old name/details pair + creation of the new pair.
 * **Exact Duplicates:** Two entries with exactly the same name and description are treated as one logical item; the Home Assistant sync model does not currently preserve duplicate multiplicity.
-* **Ambiguous Text on Alexa:** Lists without description support always split a title at the first space: the first word becomes the item name and everything after it becomes the description. For example, `"Milk low-fat"` is interpreted as name `Milk` and description `low-fat`. The integration cannot distinguish a multi-word product name from a name followed by details; this rule applies to new items as well.
+* **Ambiguous Text on Alexa:** When title splitting is enabled (the default), lists without description support split a title at the first space: the first word becomes the item name and everything after it becomes the description. For example, `"Milk low-fat"` is interpreted as name `Milk` and description `low-fat`. The integration cannot distinguish a multi-word product name from a name followed by details; this rule applies to new items as well. Disable **Split titles into name and description** for the configured list pair to keep the complete title intact.
 * **Parentheses:** Parentheses in item names are not treated specially.
 
 ---

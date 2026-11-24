@@ -3,10 +3,18 @@
     "step": {
       "user": {
         "title": "To-do Sync",
-        "description": "Choose two to-do lists whose open items should be synchronized.",
+        "description": "Choose two to-do lists whose open items should be synchronized. Set the sync interval and optional cleanup and title handling below. You can change these settings later.",
         "data": {
           "list_a": "List A",
-          "list_b": "List B"
+          "list_b": "List B",
+          "interval": "Sync interval (minutes)",
+          "remove_duplicates": "Remove duplicate open items before each sync",
+          "split_title": "Split titles into name and description"
+        },
+        "data_description": {
+          "interval": "How often To-do Sync checks both lists automatically.",
+          "remove_duplicates": "Completes extra open copies of the same item, keeping one open copy per list.",
+          "split_title": "For lists without description support, use the first word as the item name and the rest as its description. Turn this off to keep the full title as the item name."
         }
       }
     },
@@ -41,9 +49,16 @@
     "step": {
       "init": {
         "title": "To-do Sync",
+        "description": "For lists without description support, the first word becomes the item name and the rest becomes its description. Disable this option to keep the complete title intact.",
         "data": {
           "interval": "Sync interval (minutes)",
-          "remove_duplicates": "Remove duplicate open items before each sync"
+          "remove_duplicates": "Remove duplicate open items before each sync",
+          "split_title": "Split titles into name and description"
+        },
+        "data_description": {
+          "interval": "How often To-do Sync checks both lists automatically.",
+          "remove_duplicates": "Completes extra open copies of the same item, keeping one open copy per list.",
+          "split_title": "For lists without description support, use the first word as the item name and the rest as its description. Turn this off to keep the full title as the item name."
         }
       }
     }
