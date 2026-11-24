@@ -728,6 +728,7 @@ class TodoSyncer:
         supports_description = self._supports_description(entity_id)
         aligned = dict(items)
         claimed: set[ItemKey] = set()
+        claimed_items: set[ItemKey] = set()
 
         for snapshot_key, snapshot_item in self._snapshot.items():
             if snapshot_item["status"] != OPEN:
@@ -754,11 +755,17 @@ class TodoSyncer:
             if len(matches) != 1 or snapshot_key in claimed:
                 continue
             parsed_key = matches[0]
+            if (
+                parsed_key in claimed_items
+                or (snapshot_key in aligned and snapshot_key != parsed_key)
+            ):
+                continue
             current = aligned.pop(parsed_key)
             current["name"] = snapshot_item["name"]
             current["description"] = snapshot_item["description"]
             aligned[snapshot_key] = current
             claimed.add(snapshot_key)
+            claimed_items.add(parsed_key)
 
         return aligned
 
