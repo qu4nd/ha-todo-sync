@@ -106,7 +106,8 @@ async def test_status_is_persisted_and_notifies_listeners(syncer):
     data_factory, delay = syncer._store._store.async_delay_save.call_args.args
     assert delay == 5
     assert data_factory() == {
-        "snapshot": {}, "status": syncer._status.to_dict(), "pending_writes": {}
+        "snapshot": {}, "status": syncer._status.to_dict(), "pending_writes": {},
+        "split_title": True,
     }
     syncer._store._store.async_save.assert_not_awaited()
 
