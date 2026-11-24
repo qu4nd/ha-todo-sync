@@ -54,6 +54,11 @@
           "interval": "Sync interval (minutes)",
           "remove_duplicates": "Remove duplicate open items before each sync",
           "split_title": "Split titles into name and description"
+        },
+        "data_description": {
+          "interval": "How often To-do Sync checks both lists automatically.",
+          "remove_duplicates": "Completes extra open copies of the same item, keeping one open copy per list.",
+          "split_title": "For lists without description support, use the first word as the item name and the rest as its description. Turn this off to keep the full title as the item name."
         }
       }
     }
