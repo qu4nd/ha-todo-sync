@@ -230,6 +230,46 @@ def test_title_splitting_is_enabled_for_existing_entries_by_default(syncer):
     assert syncer.split_title is True
 
 
+@pytest.mark.asyncio
+async def test_changing_title_splitting_rebaselines_persisted_state(syncer):
+    stored_data = {
+        "snapshot": {
+            '["milk","3"]': {
+                "title": "Milk 3",
+                "name": "Milk",
+                "status": "needs_action",
+                "description": "3",
+            }
+        },
+        "pending_writes": {"old-identity": {"expires": 9999999999}},
+        "status": {},
+        "split_title": True,
+    }
+    syncer.split_title = False
+    syncer._store.async_load = AsyncMock(return_value=stored_data)
+    syncer._store.set_loaded_data(stored_data)
+    syncer._schedule = Mock()
+
+    with (
+        patch(
+            "custom_components.todo_sync.syncer.async_track_state_change_event",
+            return_value=lambda: None,
+        ),
+        patch(
+            "custom_components.todo_sync.syncer.async_track_time_interval",
+            return_value=lambda: None,
+        ),
+    ):
+        await syncer.async_start()
+
+    assert syncer._snapshot == {}
+    assert syncer._pending_writes == {}
+    saved_data = syncer._store._store.async_save.await_args.args[0]
+    assert saved_data["split_title"] is False
+    assert saved_data["snapshot"] == {}
+    assert saved_data["pending_writes"] == {}
+
+
 def test_title_splitting_can_be_disabled_per_config_entry(hass, syncer):
     entry = MockConfigEntry(
         domain="todo_sync",
