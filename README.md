@@ -70,7 +70,15 @@ Lists like **Bring!** store the item name and its details separately, whereas **
 
 ### Option 1: Marketplace / HACS (Recommended)
 
-1. Go to **Settings** → **Marketplace** (or **HACS** on HA versions prior to 2026.11) → **⋮** (top right) → **Custom repositories**.
+1. Open **HACS** (or **Marketplace**, depending on your Home Assistant version).
+2. Search for **To-do Sync**, open the integration, and install it.
+3. Restart Home Assistant.
+
+#### Alternative: Add as a custom repository
+
+If **To-do Sync** does not appear in the catalog yet, you can add it manually:
+
+1. In HACS, open **⋮** (top right) → **Custom repositories**.
 2. Add `https://github.com/qu4nd/ha-todo-sync` with category **Integration**.
 3. Install **To-do Sync** and restart Home Assistant.
 
