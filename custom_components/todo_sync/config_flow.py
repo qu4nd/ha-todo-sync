@@ -83,7 +83,9 @@ class TodoSyncOptionsFlow(config_entries.OptionsFlow):
                     vol.Required(
                         CONF_REMOVE_DUPLICATES, default=remove_duplicates
                     ): selector.BooleanSelector(),
-                    vol.Required(CONF_SPLIT_TITLE, default=split_title): selector.BooleanSelector(),
+                    vol.Required(
+                        CONF_SPLIT_TITLE, default=split_title
+                    ): selector.BooleanSelector(),
                 }
             ),
         )
