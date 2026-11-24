@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "To-do Sync",
-        "description": "Wähle zwei To-do-Listen aus, deren offene Einträge synchronisiert werden sollen.",
+        "description": "Wähle zwei To-do-Listen aus, deren offene Einträge synchronisiert werden sollen. Lege unten das Sync-Intervall sowie die optionale Bereinigung und Titelaufteilung fest. Du kannst diese Einstellungen später ändern.",
         "data": {
           "list_a": "Liste A",
           "list_b": "Liste B",
