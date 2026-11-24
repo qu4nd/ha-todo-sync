@@ -726,9 +726,7 @@ class TodoSyncer:
     ) -> dict[ItemKey, TodoItem]:
         """Keep known logical identities stable across title-splitting changes."""
         supports_description = self._supports_description(entity_id)
-        aligned = dict(items)
-        claimed: set[ItemKey] = set()
-        claimed_items: set[ItemKey] = set()
+        matches_by_item: dict[ItemKey, list[tuple[ItemKey, TodoItem]]] = {}
 
         for snapshot_key, snapshot_item in self._snapshot.items():
             if snapshot_item["status"] != OPEN:
@@ -750,22 +748,34 @@ class TodoSyncer:
                     if item["title"] == expected_title
                 ]
 
-            # Ambiguous provider representations must not be guessed. Leave them
-            # under their parsed identities so the normal safety mechanisms apply.
-            if len(matches) != 1 or snapshot_key in claimed:
-                continue
-            parsed_key = matches[0]
-            if (
-                parsed_key in claimed_items
-                or (snapshot_key in aligned and snapshot_key != parsed_key)
-            ):
-                continue
-            current = aligned.pop(parsed_key)
+            if len(matches) == 1:
+                matches_by_item.setdefault(matches[0], []).append(
+                    (snapshot_key, snapshot_item)
+                )
+
+        # Only apply one-to-one matches. Ambiguous representations must not be
+        # guessed, and a target key occupied by an unrelated item must not be
+        # overwritten.
+        mappings = {
+            parsed_key: candidates[0]
+            for parsed_key, candidates in matches_by_item.items()
+            if len(candidates) == 1
+        }
+        mapped_keys = set(mappings)
+        mappings = {
+            parsed_key: (snapshot_key, snapshot_item)
+            for parsed_key, (snapshot_key, snapshot_item) in mappings.items()
+            if snapshot_key not in items or snapshot_key in mapped_keys
+        }
+
+        aligned = {
+            key: item for key, item in items.items() if key not in mappings
+        }
+        for parsed_key, (snapshot_key, snapshot_item) in mappings.items():
+            current = dict(items[parsed_key])
             current["name"] = snapshot_item["name"]
             current["description"] = snapshot_item["description"]
             aligned[snapshot_key] = current
-            claimed.add(snapshot_key)
-            claimed_items.add(parsed_key)
 
         return aligned
 
