@@ -467,6 +467,7 @@ async def test_new_item_on_a_is_applied_to_b(syncer):
                 "expires": syncer._pending_writes[syncer._pending_key("todo.b", _identity("Milch", "3"))]["expires"],
             }
         },
+        "split_title": True,
     })
 
 
