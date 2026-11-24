@@ -23,6 +23,7 @@ from .const import (
     CONF_LIST_A,
     CONF_LIST_B,
     CONF_REMOVE_DUPLICATES,
+    CONF_SPLIT_TITLE,
     DEBOUNCE_SECONDS,
     DOMAIN,
     DONE,
@@ -82,6 +83,7 @@ class TodoSyncer:
         self.b: str = entry.data[CONF_LIST_B]
         self.interval: int = int(entry.options.get(CONF_INTERVAL, SCAN_INTERVAL_MINUTES))
         self.remove_duplicates = bool(entry.options.get(CONF_REMOVE_DUPLICATES, False))
+        self.split_title = bool(entry.options.get(CONF_SPLIT_TITLE, True))
         self._store = TodoSyncStorage(hass, f"{DOMAIN}.{entry.entry_id}")
         self._lock = asyncio.Lock()
         # Last successfully synchronized state, keyed by normalized name + description.
@@ -391,7 +393,10 @@ class TodoSyncer:
                 raise _InvalidItemIdentityError(entity_id, "invalid_description")
             name, details = summary.strip(), description.strip()
             if not supports:
-                name, details = self._split_title(name)
+                if self.split_title:
+                    name, details = self._split_title(name)
+                else:
+                    details = ""
             if name:
                 groups.setdefault(_identity(name, details), []).append(item)
 
@@ -443,7 +448,10 @@ class TodoSyncer:
                 raise _InvalidItemIdentityError(entity_id, "invalid_description")
             name, desc = title, description.strip()
             if not supports:
-                name, desc = self._split_title(title)
+                if self.split_title:
+                    name, desc = self._split_title(title)
+                else:
+                    name, desc = title, ""
             if name:
                 # Keep the original provider title for safe service addressing;
                 # it is not part of cross-provider identity.
