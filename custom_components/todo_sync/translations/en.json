@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "To-do Sync",
-        "description": "Choose two to-do lists whose open items should be synchronized.",
+        "description": "Choose two to-do lists whose open items should be synchronized. Set the sync interval and optional cleanup and title handling below. You can change these settings later.",
         "data": {
           "list_a": "List A",
           "list_b": "List B",
