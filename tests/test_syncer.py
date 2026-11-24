@@ -231,21 +231,22 @@ def test_title_splitting_is_enabled_for_existing_entries_by_default(syncer):
 
 
 @pytest.mark.asyncio
-async def test_changing_title_splitting_rebaselines_persisted_state(syncer):
+@pytest.mark.parametrize("new_split_title", [False, True])
+async def test_changing_title_splitting_preserves_snapshot_and_clears_pending_writes(
+    syncer, new_split_title
+):
+    stored_snapshot = {
+        _identity("Milk", "3"): item("Milk", description="3")
+    }
     stored_data = {
         "snapshot": {
-            '["milk","3"]': {
-                "title": "Milk 3",
-                "name": "Milk",
-                "status": "needs_action",
-                "description": "3",
-            }
+            '["milk","3"]': stored_snapshot[_identity("Milk", "3")]
         },
         "pending_writes": {"old-identity": {"expires": 9999999999}},
         "status": {},
-        "split_title": True,
+        "split_title": not new_split_title,
     }
-    syncer.split_title = False
+    syncer.split_title = new_split_title
     syncer._store.async_load = AsyncMock(return_value=stored_data)
     syncer._store.set_loaded_data(stored_data)
     syncer._schedule = Mock()
@@ -262,12 +263,44 @@ async def test_changing_title_splitting_rebaselines_persisted_state(syncer):
     ):
         await syncer.async_start()
 
-    assert syncer._snapshot == {}
+    assert syncer._snapshot == stored_snapshot
     assert syncer._pending_writes == {}
     saved_data = syncer._store._store.async_save.await_args.args[0]
-    assert saved_data["split_title"] is False
-    assert saved_data["snapshot"] == {}
+    assert saved_data["split_title"] is new_split_title
+    assert saved_data["snapshot"] == {
+        '["milk","3"]': stored_snapshot[_identity("Milk", "3")]
+    }
     assert saved_data["pending_writes"] == {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("old_split_title", "new_split_title"),
+    [(True, False), (False, True)],
+)
+async def test_sync_keeps_description_provider_and_title_only_identity_aligned(
+    syncer, old_split_title, new_split_title
+):
+    # The stored snapshot was created with the previous parsing strategy.
+    assert old_split_title != new_split_title
+    syncer.split_title = new_split_title
+    key = _identity("Milk", "3")
+    baseline = item("Milk", description="3")
+    syncer._snapshot = {key: dict(baseline)}
+    syncer._supports_description = lambda entity_id: entity_id == "todo.a"
+    syncer._fetch = AsyncMock(side_effect=[
+        [{"summary": "Milk", "description": "3", "status": "needs_action"}],
+        [{"summary": "Milk 3", "status": "needs_action"}],
+        [{"summary": "Milk", "description": "3", "status": "needs_action"}],
+        [{"summary": "Milk 3", "status": "needs_action"}],
+    ])
+    syncer._apply = AsyncMock()
+
+    await syncer._sync("todo.a")
+    await syncer._sync("todo.b")
+
+    syncer._apply.assert_not_awaited()
+    assert syncer._snapshot == {key: baseline}
 
 
 def test_title_splitting_can_be_disabled_per_config_entry(hass, syncer):

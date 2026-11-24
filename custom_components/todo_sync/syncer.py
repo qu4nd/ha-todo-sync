@@ -110,11 +110,11 @@ class TodoSyncer:
         data = await self._store.async_load()
         self._snapshot = self._store.migrate_snapshot((data or {}).get("snapshot", {}))
         self._pending_writes = (data or {}).get("pending_writes", {})
-        # Changing title identity changes the keys used by the three-way diff.
-        # Discard the old baseline and pending writes so the next run re-baselines
-        # both live lists instead of interpreting the identity change as deletions.
+        # Pending writes use provider-independent identity keys from the previous
+        # parsing mode. They cannot safely be resolved after the identity strategy
+        # changes, but the snapshot is retained: it lets _prepare_items recognize
+        # the same logical entries in their new provider-specific representation.
         if (data or {}).get("split_title", True) != self.split_title:
-            self._snapshot = {}
             self._pending_writes = {}
         now = time.time()
         self._pending_writes = {
@@ -721,15 +721,73 @@ class TodoSyncer:
                 raise _TodoListReadError(entity_id) from err
         return raw[self.a], raw[self.b]
 
+    def _align_items_to_snapshot(
+        self, entity_id: str, items: dict[ItemKey, TodoItem]
+    ) -> dict[ItemKey, TodoItem]:
+        """Keep known logical identities stable across title-splitting changes."""
+        supports_description = self._supports_description(entity_id)
+        matches_by_item: dict[ItemKey, list[tuple[ItemKey, TodoItem]]] = {}
+
+        for snapshot_key, snapshot_item in self._snapshot.items():
+            if snapshot_item["status"] != OPEN:
+                continue
+            if supports_description:
+                matches = [
+                    key for key, item in items.items()
+                    if item["name"] == snapshot_item["name"]
+                    and item["description"] == snapshot_item["description"]
+                ]
+            else:
+                expected_title = self._title(
+                    entity_id,
+                    snapshot_item["name"],
+                    snapshot_item["description"],
+                )
+                matches = [
+                    key for key, item in items.items()
+                    if item["title"] == expected_title
+                ]
+
+            if len(matches) == 1:
+                matches_by_item.setdefault(matches[0], []).append(
+                    (snapshot_key, snapshot_item)
+                )
+
+        # Only apply one-to-one matches. Ambiguous representations must not be
+        # guessed, and a target key occupied by an unrelated item must not be
+        # overwritten.
+        mappings = {
+            parsed_key: candidates[0]
+            for parsed_key, candidates in matches_by_item.items()
+            if len(candidates) == 1
+        }
+        mapped_keys = set(mappings)
+        mappings = {
+            parsed_key: (snapshot_key, snapshot_item)
+            for parsed_key, (snapshot_key, snapshot_item) in mappings.items()
+            if snapshot_key not in items or snapshot_key in mapped_keys
+        }
+
+        aligned = {
+            key: item for key, item in items.items() if key not in mappings
+        }
+        for parsed_key, (snapshot_key, snapshot_item) in mappings.items():
+            current = dict(items[parsed_key])
+            current["name"] = snapshot_item["name"]
+            current["description"] = snapshot_item["description"]
+            aligned[snapshot_key] = current
+
+        return aligned
+
     def _prepare_items(
         self, raw_a: list[dict], raw_b: list[dict]
     ) -> tuple[dict[ItemKey, TodoItem], dict[ItemKey, TodoItem]]:
         """Parse provider data and resolve reads that are stale after our own writes."""
-        # When title splitting is enabled, providers without description support
-        # encode details after the first word in the title. ItemKey then normalizes
-        # the resulting name and details identically on every provider.
-        items_a = self._parse(self.a, raw_a)
-        items_b = self._parse(self.b, raw_b)
+        # Preserve snapshot identities when a title-only provider changes between
+        # split and unsplit parsing. Its raw title can still identify the prior
+        # logical name/details pair, even though its newly parsed ItemKey differs.
+        items_a = self._align_items_to_snapshot(self.a, self._parse(self.a, raw_a))
+        items_b = self._align_items_to_snapshot(self.b, self._parse(self.b, raw_b))
         # Completed provider records are history, not active list content. Keep
         # them in the comparison only when the last common snapshot says the item
         # was open; that is the one case where completion is a real state change.
