@@ -100,11 +100,19 @@ Copy the `custom_components/todo_sync` folder into your Home Assistant `<config>
 2. Select **List A** and **List B** (must be two different `todo` entities).
 3. *(Optional)* Click **Configure** on the integration entry to adjust the periodic sync interval (`1–1440 min`) and enable duplicate cleanup. This option is disabled by default. When enabled, To-do Sync checks the currently open items on both lists before each synchronization and marks additional open occurrences of the same logical item as completed, keeping one open occurrence per list. Matching uses the normalized item name and description (case-insensitive; surrounding whitespace is ignored). The cleanup is verified before the normal sync continues; if it cannot be completed or verified safely, that sync run is stopped. Previously completed provider history is not fetched or modified.
 
+<p align="center">
+  <img src="images/configuration.jpg" width="360" alt="To-do Sync configuration dialog showing the two selected to-do lists">
+</p>
+
 ---
 
 ## 📊 Synchronization Status
 
 To-do Sync creates a diagnostic sensor for each configured list pair. The sensor is available alongside the integration's other entities and shows the latest synchronization state:
+
+<p align="center">
+  <img src="images/synchronization-status.jpg" width="540" alt="To-do Sync device page showing the Sync Now button and successful synchronization status">
+</p>
 
 | State | Meaning |
 | :--- | :--- |
