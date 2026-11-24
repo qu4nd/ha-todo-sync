@@ -43,7 +43,8 @@
         "title": "To-do Sync",
         "data": {
           "interval": "Sync-Intervall (Minuten)",
-          "remove_duplicates": "Doppelte offene Einträge vor jeder Synchronisierung bereinigen"
+          "remove_duplicates": "Doppelte offene Einträge vor jeder Synchronisierung bereinigen",
+          "split_title": "Titel bei Listen ohne Beschreibungsunterstützung in Name und Beschreibung aufteilen"
         }
       }
     }
