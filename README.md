@@ -53,13 +53,13 @@ Lists like **Bring!** store the item name and its details separately, whereas **
 
 **The first word is always the item name; everything after the first space is the detail.** This rule is intentional and does not try to guess whether the remaining text is a quantity, a note, or part of a product name.
 
-| Action | Bring! (`todo.zuhause`) | ⇄ | Alexa (`todo.alexa_shopping_list`) | How it's handled |
+| Action | Bring! (`todo.list_a`) | ⇄ | Alexa (`todo.alexa_shopping_list`) | How it's handled |
 | :--- | :--- | :---: | :--- | :--- |
-| **Add on Bring!** | **Item:** `Milch`<br>**Desc:** `3` | ➡️ | **Title:** `Milch 3` | Appends description to the title on lists without description support. |
-| **Add on Alexa** | **Item:** `Käse`<br>**Desc:** `200 g` | ⬅️ | **Title:** `Käse 200 g` | Splits after the first word: `Käse` is the name and `200 g` the detail. |
-| **Text Details** | **Item:** `gelbe`<br>**Desc:** `Tomaten` | 🔄 | **Title:** `gelbe Tomaten` | The first word remains the identity even when the detail is ordinary text rather than a quantity. |
-| **Same Name, Different Details** | **Items:** `Pizza` + **Desc:** `4 Käse` and `4 Stagioni` | 🔄 | **Titles:** `Pizza 4 Käse` and `Pizza 4 Stagioni` | Both titles become the same name (`Pizza`) with different details, so neither entry overwrites the other. |
-| **Numbers & Product Names** | **Item:** `Formel`<br>**Desc:** `1` | 🔄 | **Title:** `Formel 1` | Numbers are treated like any other detail; no special quantity or product-name detection is attempted. |
+| **Add on Bring!** | **Item:** `Milk`<br>**Desc:** `3` | ➡️ | **Title:** `Milk 3` | Appends description to the title on lists without description support. |
+| **Add on Alexa** | **Item:** `Cheese`<br>**Desc:** `200 g` | ⬅️ | **Title:** `Cheese 200 g` | Splits after the first word: `Cheese` is the name and `200 g` the detail. |
+| **Text Details** | **Item:** `yellow`<br>**Desc:** `tomatoes` | 🔄 | **Title:** `yellow tomatoes` | The first word remains the identity even when the detail is ordinary text rather than a quantity. |
+| **Same Name, Different Details** | **Items:** `Pizza` + **Desc:** `Four Cheese` and `Four Seasons` | 🔄 | **Titles:** `Pizza Four Cheese` and `Pizza Four Seasons` | Both titles become the same name (`Pizza`) with different details, so neither entry overwrites the other. |
+| **Numbers & Product Names** | **Item:** `Formula`<br>**Desc:** `1` | 🔄 | **Title:** `Formula 1` | Numbers are treated like any other detail; no special quantity or product-name detection is attempted. |
 
 ---
 
@@ -162,7 +162,7 @@ Snapshots are written only when their persisted data changes. Transient `syncing
 * **Open-List State:** Only open items returned by Home Assistant's `todo.get_items` service are part of the synchronization model. The last common snapshot lets the integration distinguish a newly added item from an item removed on one side. Completing and deleting an item have the same effect here: the item is no longer open and is removed from the other active list as well. Completed-item history is not synchronized.
 * **Renaming Items:** Changing an item's name or description is processed as a deletion of the old name/details pair + creation of the new pair.
 * **Exact Duplicates:** Two entries with exactly the same name and description are treated as one logical item; the Home Assistant sync model does not currently preserve duplicate multiplicity.
-* **Ambiguous Text on Alexa:** Lists without description support always split a title at the first space: the first word becomes the item name and everything after it becomes the description. For example, `"Milch fettarm"` is interpreted as name `Milch` and description `fettarm`. The integration cannot distinguish a multi-word product name from a name followed by details; this rule applies to new items as well.
+* **Ambiguous Text on Alexa:** Lists without description support always split a title at the first space: the first word becomes the item name and everything after it becomes the description. For example, `"Milk low-fat"` is interpreted as name `Milk` and description `low-fat`. The integration cannot distinguish a multi-word product name from a name followed by details; this rule applies to new items as well.
 * **Parentheses:** Parentheses in item names are not treated specially.
 
 ---
