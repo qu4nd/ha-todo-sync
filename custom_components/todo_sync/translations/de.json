@@ -54,6 +54,11 @@
           "interval": "Sync-Intervall (Minuten)",
           "remove_duplicates": "Doppelte offene Einträge vor jeder Synchronisierung bereinigen",
           "split_title": "Titel in Name und Beschreibung aufteilen"
+        },
+        "data_description": {
+          "interval": "Wie oft To-do Sync beide Listen automatisch abgleicht.",
+          "remove_duplicates": "Zusätzliche offene Kopien desselben Eintrags werden als erledigt markiert. Pro Liste bleibt eine offene Kopie erhalten.",
+          "split_title": "Bei Listen ohne Beschreibungsunterstützung wird das erste Wort als Name und der Rest als Beschreibung verwendet. Deaktiviere die Option, um den vollständigen Titel als Namen beizubehalten."
         }
       }
     }
