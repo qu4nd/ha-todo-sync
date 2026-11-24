@@ -33,6 +33,17 @@
 
 ---
 
+## 🧪 Tested To-do Integrations
+
+The following Home Assistant to-do integrations have been manually tested with To-do Sync:
+
+| Integration | Tested usage |
+| :--- | :--- |
+| **Bring!** | Bidirectional synchronization |
+| **Alexa Shopping List** | Bidirectional synchronization, including title-only items |
+
+To-do Sync is designed to work with Home Assistant `todo` entities in general. Compatibility with other providers depends on their implementation of the Home Assistant To-do API and supported features. Integrations not listed above have not yet been confirmed through hands-on testing.
+
 ## 🔒 Privacy – Your Data Stays Yours
 
 **To-do Sync runs locally inside your Home Assistant instance.** It does not connect to Bring!, Amazon, or any other provider directly. It only accesses the two Home Assistant `todo` entities you select, using Home Assistant's built-in services.
