@@ -41,10 +41,11 @@
     "step": {
       "init": {
         "title": "To-do Sync",
+        "description": "For lists without description support, the first word becomes the item name and the rest becomes its description. Disable this option to keep the complete title intact.",
         "data": {
           "interval": "Sync interval (minutes)",
           "remove_duplicates": "Remove duplicate open items before each sync",
-          "split_title": "Split titles into name and description for lists without description support"
+          "split_title": "Split titles into name and description"
         }
       }
     }
