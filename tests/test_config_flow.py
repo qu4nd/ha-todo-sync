@@ -17,7 +17,9 @@ from custom_components.todo_sync.const import (
 
 
 @pytest.mark.asyncio
-async def test_setup_stores_lists_as_data_and_settings_as_options(hass):
+async def test_setup_stores_lists_as_data_and_settings_as_options(
+    hass, enable_custom_integrations
+):
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": SOURCE_USER},
@@ -49,7 +51,7 @@ async def test_setup_stores_lists_as_data_and_settings_as_options(hass):
 
 
 @pytest.mark.asyncio
-async def test_setup_defaults_are_preserved(hass):
+async def test_setup_defaults_are_preserved(hass, enable_custom_integrations):
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": SOURCE_USER},
