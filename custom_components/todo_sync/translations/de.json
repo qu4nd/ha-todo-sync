@@ -41,10 +41,11 @@
     "step": {
       "init": {
         "title": "To-do Sync",
+        "description": "Bei Listen ohne Beschreibungsunterstützung wird das erste Wort zum Namen und der Rest zur Beschreibung. Deaktiviere diese Option, um den vollständigen Titel beizubehalten.",
         "data": {
           "interval": "Sync-Intervall (Minuten)",
           "remove_duplicates": "Doppelte offene Einträge vor jeder Synchronisierung bereinigen",
-          "split_title": "Titel bei Listen ohne Beschreibungsunterstützung in Name und Beschreibung aufteilen"
+          "split_title": "Titel in Name und Beschreibung aufteilen"
         }
       }
     }
