@@ -725,10 +725,9 @@ class TodoSyncer:
         self, raw_a: list[dict], raw_b: list[dict]
     ) -> tuple[dict[ItemKey, TodoItem], dict[ItemKey, TodoItem]]:
         """Parse provider data and resolve reads that are stale after our own writes."""
-        # Providers without description support encode details after the first
-        # word in the title. This deterministic rule keeps identity consistent
-        # regardless of which provider supplied the item; ItemKey then normalizes
-        # both fields identically on every provider.
+        # When title splitting is enabled, providers without description support
+        # encode details after the first word in the title. ItemKey then normalizes
+        # the resulting name and details identically on every provider.
         items_a = self._parse(self.a, raw_a)
         items_b = self._parse(self.b, raw_b)
         # Completed provider records are history, not active list content. Keep
