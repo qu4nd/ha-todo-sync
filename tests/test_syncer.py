@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.todo_sync.const import CONF_LIST_A, CONF_LIST_B
+from custom_components.todo_sync.const import CONF_LIST_A, CONF_LIST_B, CONF_SPLIT_TITLE
 from custom_components.todo_sync.policy import MAX_RETRY_SECONDS, RETRY_SECONDS
 from custom_components.todo_sync.storage import TodoSyncStorage
 from custom_components.todo_sync.syncer import (
@@ -220,6 +220,55 @@ def test_parse_alexa_titles_splits_name_and_details(syncer):
         _identity("Pizza", "4 Käse"),
         _identity("Pizza", "4 Stagioni"),
     }
+
+
+def test_title_splitting_is_enabled_for_existing_entries_by_default(syncer):
+    assert syncer.split_title is True
+
+
+def test_title_splitting_can_be_disabled_per_config_entry(hass, syncer):
+    entry = MockConfigEntry(
+        domain="todo_sync",
+        data={CONF_LIST_A: "todo.c", CONF_LIST_B: "todo.d"},
+        options={CONF_SPLIT_TITLE: False},
+    )
+    other_syncer = TodoSyncer(hass, entry)
+
+    assert syncer.split_title is True
+    assert other_syncer.split_title is False
+
+
+def test_parse_keeps_full_title_when_splitting_is_disabled(syncer):
+    syncer.split_title = False
+    syncer._supports_description = lambda _entity_id: False
+
+    parsed = syncer._parse(
+        "todo.a",
+        [{"summary": "500 g chicken breast", "status": "needs_action", "uid": "chicken"}],
+    )
+
+    assert parsed == {
+        _identity("500 g chicken breast", ""): {
+            "title": "500 g chicken breast",
+            "name": "500 g chicken breast",
+            "status": "needs_action",
+            "description": "",
+            "uid": "chicken",
+        }
+    }
+
+
+def test_duplicate_cleanup_does_not_split_titles_when_disabled(syncer):
+    syncer.split_title = False
+    syncer._supports_description = lambda _entity_id: False
+    syncer._split_title = Mock(side_effect=AssertionError("title must not be split"))
+    raw = [
+        {"summary": "500 g chicken breast", "status": "needs_action", "uid": "one"},
+        {"summary": "1 kg potatoes", "status": "needs_action", "uid": "two"},
+    ]
+
+    assert syncer._duplicate_cleanup_plan("todo.a", raw) == []
+    syncer._split_title.assert_not_called()
 
 
 def test_migrate_preserves_name_and_numeric_detail_pair(syncer):
