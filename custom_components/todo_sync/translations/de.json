@@ -6,7 +6,10 @@
         "description": "Wähle zwei To-do-Listen aus, deren offene Einträge synchronisiert werden sollen.",
         "data": {
           "list_a": "Liste A",
-          "list_b": "Liste B"
+          "list_b": "Liste B",
+          "interval": "Sync-Intervall (Minuten)",
+          "remove_duplicates": "Doppelte offene Einträge vor jeder Synchronisierung bereinigen",
+          "split_title": "Titel in Name und Beschreibung aufteilen"
         }
       }
     },
