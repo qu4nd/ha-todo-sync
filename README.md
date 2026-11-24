@@ -33,20 +33,15 @@
 
 ---
 
-## 🧪 Tested To-do Integrations
+### Tested To-do Lists
 
-The following Home Assistant to-do integrations have been reported or verified in real-world setups:
-
-| Integration | Status |
+| Home Assistant integration | To-do list |
 | :--- | :--- |
-| **Bring!** | Manually tested; bidirectional synchronization |
-| **Alexa Shopping List** | Manually tested; bidirectional synchronization, including title-only items |
-| **Mealie shopping list** | Reported by a user; beta validation pending |
-| **Nextcloud To-do (CalDAV)** | Reported by a user; beta validation pending |
-
-The Mealie and Nextcloud entries refer to a user-reported setup that synchronizes a Mealie shopping list with a Nextcloud To-do list over CalDAV. This combination is currently being tested with a beta release and is not yet marked as verified.
-
-To-do Sync is designed to work with Home Assistant `todo` entities in general. Compatibility with other providers depends on their implementation of the Home Assistant To-do API and supported features. Entries marked as user-reported should not be considered verified until testing has been completed.
+| **Local To-do** | Home Assistant local list |
+| **Bring!** | Bring! shopping list |
+| **Alexa** | Alexa Shopping List |
+| **Mealie** | Mealie shopping list |
+| **CalDAV** | Nextcloud To-do |
 
 ## 🔒 Privacy – Your Data Stays Yours
 
