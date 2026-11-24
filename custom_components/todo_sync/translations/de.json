@@ -8,8 +8,8 @@
           "list_a": "Liste A",
           "list_b": "Liste B",
           "interval": "Sync-Intervall (Minuten)",
-          "remove_duplicates": "Doppelte offene Einträge vor jeder Synchronisierung bereinigen",
-          "split_title": "Titel in Name und Beschreibung aufteilen"
+          "remove_duplicates": "Doppelte offene Einträge automatisch als erledigt markieren",
+          "split_title": "Titel automatisch in Name und Beschreibung aufteilen"
         },
         "data_description": {
           "interval": "Wie oft To-do Sync beide Listen automatisch abgleicht.",
@@ -52,8 +52,8 @@
         "description": "Bei Listen ohne Beschreibungsunterstützung wird das erste Wort zum Namen und der Rest zur Beschreibung. Deaktiviere diese Option, um den vollständigen Titel beizubehalten.",
         "data": {
           "interval": "Sync-Intervall (Minuten)",
-          "remove_duplicates": "Doppelte offene Einträge vor jeder Synchronisierung bereinigen",
-          "split_title": "Titel in Name und Beschreibung aufteilen"
+          "remove_duplicates": "Doppelte offene Einträge automatisch als erledigt markieren",
+          "split_title": "Titel automatisch in Name und Beschreibung aufteilen"
         },
         "data_description": {
           "interval": "Wie oft To-do Sync beide Listen automatisch abgleicht.",
