@@ -6,7 +6,10 @@
         "description": "Choose two to-do lists whose open items should be synchronized.",
         "data": {
           "list_a": "List A",
-          "list_b": "List B"
+          "list_b": "List B",
+          "interval": "Sync interval (minutes)",
+          "remove_duplicates": "Remove duplicate open items before each sync",
+          "split_title": "Split titles into name and description"
         }
       }
     },
