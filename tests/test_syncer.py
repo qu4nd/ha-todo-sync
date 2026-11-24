@@ -7,7 +7,11 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.todo_sync.const import CONF_LIST_A, CONF_LIST_B, CONF_SPLIT_TITLE
+from custom_components.todo_sync.const import (
+    CONF_LIST_A,
+    CONF_LIST_B,
+    CONF_SPLIT_TITLE,
+)
 from custom_components.todo_sync.policy import MAX_RETRY_SECONDS, RETRY_SECONDS
 from custom_components.todo_sync.storage import TodoSyncStorage
 from custom_components.todo_sync.syncer import (
