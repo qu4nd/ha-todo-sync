@@ -59,6 +59,7 @@ class TodoSyncStorage:
         snapshot: dict[ItemKey, TodoItem],
         pending_writes: dict[str, dict],
         status: SyncStatus,
+        split_title: bool = True,
     ) -> dict:
         """Return the existing JSON-compatible storage envelope."""
         stored_snapshot = {
@@ -73,6 +74,7 @@ class TodoSyncStorage:
             "snapshot": copy.deepcopy(stored_snapshot),
             "status": status.to_dict(),
             "pending_writes": copy.deepcopy(pending_writes),
+            "split_title": split_title,
         }
 
     async def async_save(self, data: dict) -> None:
