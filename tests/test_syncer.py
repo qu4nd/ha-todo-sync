@@ -274,11 +274,16 @@ async def test_changing_title_splitting_preserves_snapshot_and_clears_pending_wr
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("split_title", [False, True])
+@pytest.mark.parametrize(
+    ("old_split_title", "new_split_title"),
+    [(True, False), (False, True)],
+)
 async def test_sync_keeps_description_provider_and_title_only_identity_aligned(
-    syncer, split_title
+    syncer, old_split_title, new_split_title
 ):
-    syncer.split_title = split_title
+    # The stored snapshot was created with the previous parsing strategy.
+    assert old_split_title != new_split_title
+    syncer.split_title = new_split_title
     key = _identity("Milk", "3")
     baseline = item("Milk", description="3")
     syncer._snapshot = {key: dict(baseline)}
