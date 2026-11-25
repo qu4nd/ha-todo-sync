@@ -8,7 +8,7 @@
           "list_a": "List A",
           "list_b": "List B",
           "interval": "Sync interval (minutes)",
-          "remove_duplicates": "Automatically complete duplicate open items",
+          "remove_duplicates": "Automatically complete duplicate open items (recommended)",
           "split_title": "Automatically split titles into name and description"
         },
         "data_description": {
@@ -52,7 +52,7 @@
         "description": "For lists without description support, the first word becomes the item name and the rest becomes its description. Disable this option to keep the complete title intact.",
         "data": {
           "interval": "Sync interval (minutes)",
-          "remove_duplicates": "Automatically complete duplicate open items",
+          "remove_duplicates": "Automatically complete duplicate open items (recommended)",
           "split_title": "Automatically split titles into name and description"
         },
         "data_description": {
