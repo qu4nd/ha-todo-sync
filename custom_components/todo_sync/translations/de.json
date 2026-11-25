@@ -13,7 +13,7 @@
         },
         "data_description": {
           "interval": "Wie oft To-do Sync beide Listen automatisch abgleicht.",
-          "remove_duplicates": "Zusätzliche offene Kopien desselben Eintrags werden als erledigt markiert. Pro Liste bleibt eine offene Kopie erhalten.",
+          "remove_duplicates": "Bei neuen Einrichtungen standardmäßig aktiviert. Zusätzliche offene Kopien desselben Eintrags werden als erledigt markiert. Pro Liste bleibt eine offene Kopie erhalten. Jede zusätzliche Kopie benötigt eine eindeutige Provider-UID. Kann der Provider sie nicht eindeutig identifizieren, wird die Synchronisierung aus Sicherheitsgründen angehalten; deaktiviere die Option für dieses Listenpaar.",
           "split_title": "Bei Listen ohne Beschreibungsunterstützung wird das erste Wort als Name und der Rest als Beschreibung verwendet. Deaktiviere die Option, um den vollständigen Titel als Namen beizubehalten."
         }
       }
