@@ -8,12 +8,12 @@
           "list_a": "Liste A",
           "list_b": "Liste B",
           "interval": "Sync-Intervall (Minuten)",
-          "remove_duplicates": "Doppelte offene Einträge automatisch als erledigt markieren",
+          "remove_duplicates": "Doppelte offene Einträge automatisch als erledigt markieren (empfohlen)",
           "split_title": "Titel automatisch in Name und Beschreibung aufteilen"
         },
         "data_description": {
           "interval": "Wie oft To-do Sync beide Listen automatisch abgleicht.",
-          "remove_duplicates": "Zusätzliche offene Kopien desselben Eintrags werden als erledigt markiert. Pro Liste bleibt eine offene Kopie erhalten.",
+          "remove_duplicates": "Bei neuen Einrichtungen standardmäßig aktiviert. Zusätzliche offene Kopien desselben Eintrags werden als erledigt markiert. Pro Liste bleibt eine offene Kopie erhalten. Jede zusätzliche Kopie benötigt eine eindeutige Provider-UID. Kann der Provider sie nicht eindeutig identifizieren, wird die Synchronisierung aus Sicherheitsgründen angehalten; deaktiviere die Option für dieses Listenpaar.",
           "split_title": "Bei Listen ohne Beschreibungsunterstützung wird das erste Wort als Name und der Rest als Beschreibung verwendet. Deaktiviere die Option, um den vollständigen Titel als Namen beizubehalten."
         }
       }
@@ -52,7 +52,7 @@
         "description": "Bei Listen ohne Beschreibungsunterstützung wird das erste Wort zum Namen und der Rest zur Beschreibung. Deaktiviere diese Option, um den vollständigen Titel beizubehalten.",
         "data": {
           "interval": "Sync-Intervall (Minuten)",
-          "remove_duplicates": "Doppelte offene Einträge automatisch als erledigt markieren",
+          "remove_duplicates": "Doppelte offene Einträge automatisch als erledigt markieren (empfohlen)",
           "split_title": "Titel automatisch in Name und Beschreibung aufteilen"
         },
         "data_description": {

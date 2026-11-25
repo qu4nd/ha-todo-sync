@@ -1177,7 +1177,7 @@ async def test_sync_runs_duplicate_cleanup_before_three_way_diff(syncer):
     assert applied_item["uid"] == "keep"
 
 
-def test_duplicate_cleanup_is_disabled_by_default(syncer):
+def test_duplicate_cleanup_stays_disabled_for_legacy_entries(syncer):
     assert syncer.remove_duplicates is False
 
 

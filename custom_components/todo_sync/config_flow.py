@@ -72,7 +72,7 @@ class TodoSyncConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         )
                     ),
                     vol.Required(
-                        CONF_REMOVE_DUPLICATES, default=False
+                        CONF_REMOVE_DUPLICATES, default=True
                     ): selector.BooleanSelector(),
                     vol.Required(
                         CONF_SPLIT_TITLE, default=True

@@ -62,16 +62,13 @@ async def test_setup_defaults_are_preserved(hass, enable_custom_integrations):
         user_input={
             CONF_LIST_A: "todo.list_a",
             CONF_LIST_B: "todo.list_b",
-            CONF_INTERVAL: SCAN_INTERVAL_MINUTES,
-            CONF_REMOVE_DUPLICATES: False,
-            CONF_SPLIT_TITLE: True,
         },
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     entry = hass.config_entries.async_entries(DOMAIN)[0]
     assert entry.options[CONF_INTERVAL] == SCAN_INTERVAL_MINUTES
-    assert entry.options[CONF_REMOVE_DUPLICATES] is False
+    assert entry.options[CONF_REMOVE_DUPLICATES] is True
     assert entry.options[CONF_SPLIT_TITLE] is True
 
 
