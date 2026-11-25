@@ -82,6 +82,8 @@ class TodoSyncer:
         self.a: str = entry.data[CONF_LIST_A]
         self.b: str = entry.data[CONF_LIST_B]
         self.interval: int = int(entry.options.get(CONF_INTERVAL, SCAN_INTERVAL_MINUTES))
+        # Missing options belong to configurations created before this setting existed;
+        # keep their historical behavior. New config flows store the enabled default explicitly.
         self.remove_duplicates = bool(entry.options.get(CONF_REMOVE_DUPLICATES, False))
         self.split_title = bool(entry.options.get(CONF_SPLIT_TITLE, True))
         self._store = TodoSyncStorage(hass, f"{DOMAIN}.{entry.entry_id}")
