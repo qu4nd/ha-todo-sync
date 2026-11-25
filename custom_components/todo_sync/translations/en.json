@@ -13,7 +13,7 @@
         },
         "data_description": {
           "interval": "How often To-do Sync checks both lists automatically.",
-          "remove_duplicates": "Completes extra open copies of the same item, keeping one open copy per list.",
+          "remove_duplicates": "Enabled by default for new setups. Completes extra open copies of the same item, keeping one open copy per list. Each extra copy must have a unique provider UID; if the provider cannot identify it safely, synchronization stops and this option must be disabled for that list pair.",
           "split_title": "For lists without description support, use the first word as the item name and the rest as its description. Turn this off to keep the full title as the item name."
         }
       }
