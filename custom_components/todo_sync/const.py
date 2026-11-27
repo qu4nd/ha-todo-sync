@@ -6,6 +6,7 @@ CONF_LIST_B = "list_b"
 CONF_INTERVAL = "interval"
 CONF_REMOVE_DUPLICATES = "remove_duplicates"
 CONF_SPLIT_TITLE = "split_title"
+CONF_RESET_SYNC_STATE = "reset_sync_state"
 SCAN_INTERVAL_MINUTES = 5
 DEBOUNCE_SECONDS = 3
 STORAGE_VERSION = 1
