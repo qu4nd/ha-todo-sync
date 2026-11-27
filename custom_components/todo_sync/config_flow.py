@@ -120,14 +120,20 @@ class TodoSyncConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # expectations, otherwise old-list state could affect new lists.
                 await self.async_set_unique_id(entry.unique_id)
                 self._abort_if_unique_id_mismatch()
+                pair_changed = frozenset(
+                    (entry.data[CONF_LIST_A], entry.data[CONF_LIST_B])
+                ) != frozenset((list_a, list_b))
+                data_updates = {
+                    CONF_LIST_A: list_a,
+                    CONF_LIST_B: list_b,
+                }
+                if pair_changed:
+                    data_updates[CONF_RESET_SYNC_STATE] = True
                 return self.async_update_reload_and_abort(
                     entry,
                     title=f"{list_a} ⇄ {list_b}",
-                    data_updates={
-                        CONF_LIST_A: list_a,
-                        CONF_LIST_B: list_b,
-                        CONF_RESET_SYNC_STATE: True,
-                    },
+                    data_updates=data_updates,
+                    reload_even_if_entry_is_unchanged=False,
                 )
 
         schema = vol.Schema(
