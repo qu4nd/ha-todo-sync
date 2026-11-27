@@ -5,6 +5,7 @@ from itertools import permutations
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from homeassistant.components.todo import TodoListEntityFeature
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.todo_sync.const import (
@@ -19,6 +20,7 @@ from custom_components.todo_sync.syncer import (
     _DuplicateCleanupError,
     _InvalidItemIdentityError,
     _TodoListReadError,
+    _UnsupportedTodoOperationError,
     _identity,
 )
 
@@ -70,6 +72,123 @@ def item(name, status="needs_action", description=""):
         "description": description,
     }
 
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("service", "feature", "data"),
+    [
+        (
+            "add_item",
+            TodoListEntityFeature.CREATE_TODO_ITEM,
+            {"entity_id": "todo.a", "item": "Milk"},
+        ),
+        (
+            "update_item",
+            TodoListEntityFeature.UPDATE_TODO_ITEM,
+            {"entity_id": "todo.a", "item": "milk-uid", "status": "completed"},
+        ),
+        (
+            "remove_item",
+            TodoListEntityFeature.DELETE_TODO_ITEM,
+            {"entity_id": "todo.a", "item": "milk-uid"},
+        ),
+    ],
+)
+@pytest.mark.parametrize("supported", [True, False])
+async def test_call_checks_explicit_write_capabilities(
+    syncer, hass, service, feature, data, supported
+):
+    hass.states.async_set(
+        "todo.a",
+        "0",
+        attributes={"supported_features": int(feature) if supported else 0},
+    )
+    with patch.object(type(syncer.hass.services), "async_call", autospec=True) as call:
+        if supported:
+            await syncer._call(service, data)
+            call.assert_awaited_once_with(
+                syncer.hass.services, "todo", service, data, blocking=True
+            )
+        else:
+            with pytest.raises(_UnsupportedTodoOperationError) as err:
+                await syncer._call(service, data)
+            assert err.value.service == service
+            assert err.value.feature == feature
+            call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "attributes",
+    [
+        {},
+        {"supported_features": None},
+        {"supported_features": "unknown"},
+    ],
+)
+@pytest.mark.parametrize(
+    ("service", "data"),
+    [
+        ("add_item", {"entity_id": "todo.a", "item": "Milk"}),
+        ("update_item", {"entity_id": "todo.a", "item": "milk-uid", "status": "completed"}),
+        ("remove_item", {"entity_id": "todo.a", "item": "milk-uid"}),
+    ],
+)
+async def test_call_does_not_assume_missing_or_invalid_capabilities_are_unsupported(
+    syncer, hass, attributes, service, data
+):
+    hass.states.async_set("todo.a", "0", attributes=attributes)
+    with patch.object(type(syncer.hass.services), "async_call", autospec=True) as call:
+        await syncer._call(service, data)
+    call.assert_awaited_once_with(
+        syncer.hass.services, "todo", service, data, blocking=True
+    )
+
+
+@pytest.mark.asyncio
+async def test_call_checks_description_feature_when_description_is_sent(syncer, hass):
+    hass.states.async_set("todo.a", "0", attributes={"supported_features": 0})
+    data = {"entity_id": "todo.a", "item": "Milk", "description": "1 litre"}
+
+    with patch.object(type(syncer.hass.services), "async_call", autospec=True) as call:
+        with pytest.raises(_UnsupportedTodoOperationError) as err:
+            await syncer._call("add_item", data)
+
+    assert err.value.feature == TodoListEntityFeature.SET_DESCRIPTION_ON_ITEM
+    call.assert_not_awaited()
+
+
+def test_missing_capability_metadata_preserves_native_descriptions(syncer, hass):
+    hass.states.async_set("todo.a", "0", attributes={})
+
+    assert syncer._supports_description("todo.a") is None
+    assert syncer._title("todo.a", "Milk", "1 litre") == "Milk"
+    assert syncer._parse(
+        "todo.a",
+        [{"summary": "Milk", "description": "1 litre", "status": "needs_action"}],
+    ) == {
+        _identity("Milk", "1 litre"): {
+            "title": "Milk",
+            "name": "Milk",
+            "status": "needs_action",
+            "description": "1 litre",
+        }
+    }
+
+
+@pytest.mark.asyncio
+async def test_create_keeps_description_when_capability_metadata_is_missing(syncer, hass):
+    hass.states.async_set("todo.a", "0", attributes={})
+    syncer._call = AsyncMock()
+    target = item("Milk", description="1 litre")
+
+    await syncer._apply("todo.a", {}, _identity("Milk", "1 litre"), target)
+
+    syncer._call.assert_awaited_once_with(
+        "add_item",
+        {"entity_id": "todo.a", "item": "Milk", "description": "1 litre"},
+    )
 
 
 def test_pending_write_masks_stale_destination_read_until_provider_catches_up(syncer):
