@@ -8,6 +8,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.todo_sync import (
     _async_reload,
+    async_remove_entry,
     async_setup_entry,
     async_unload_entry,
 )
@@ -24,45 +25,77 @@ def entry():
 
 
 @pytest.mark.asyncio
-async def test_setup_starts_and_registers_syncer(hass, entry, monkeypatch):
+async def test_setup_stores_syncer_in_runtime_data_and_registers_cleanup(
+    hass, entry, monkeypatch
+):
     syncer = Mock()
     syncer.async_start = AsyncMock()
+    on_unload = Mock()
+    entry.async_on_unload = on_unload
     monkeypatch.setattr("custom_components.todo_sync.TodoSyncer", lambda _hass, _entry: syncer)
     hass.config_entries.async_forward_entry_setups = AsyncMock()
 
     assert await async_setup_entry(hass, entry)
 
-    assert hass.data[DOMAIN][entry.entry_id] is syncer
+    assert entry.runtime_data is syncer
     syncer.async_start.assert_awaited_once()
+    on_unload.assert_any_call(syncer.async_stop)
     hass.config_entries.async_forward_entry_setups.assert_awaited_once_with(
         entry, ["button", "sensor"]
     )
 
 
 @pytest.mark.asyncio
-async def test_unload_failure_keeps_syncer_running(hass, entry):
+async def test_setup_failure_has_registered_syncer_cleanup(hass, entry, monkeypatch):
     syncer = Mock()
-    syncer.async_stop = AsyncMock()
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = syncer
+    syncer.async_start = AsyncMock(side_effect=RuntimeError("start failed"))
+    on_unload = Mock()
+    entry.async_on_unload = on_unload
+    monkeypatch.setattr("custom_components.todo_sync.TodoSyncer", lambda _hass, _entry: syncer)
+
+    with pytest.raises(RuntimeError, match="start failed"):
+        await async_setup_entry(hass, entry)
+
+    assert entry.runtime_data is syncer
+    on_unload.assert_any_call(syncer.async_stop)
+
+
+@pytest.mark.asyncio
+async def test_unload_failure_keeps_runtime_data(hass, entry):
+    syncer = Mock()
+    entry.runtime_data = syncer
     hass.config_entries.async_unload_platforms = AsyncMock(return_value=False)
 
     assert not await async_unload_entry(hass, entry)
 
-    syncer.async_stop.assert_not_awaited()
-    assert hass.data[DOMAIN][entry.entry_id] is syncer
+    assert entry.runtime_data is syncer
 
 
 @pytest.mark.asyncio
-async def test_successful_unload_stops_and_removes_syncer(hass, entry):
+async def test_successful_unload_delegates_cleanup_to_config_entry(hass, entry):
     syncer = Mock()
-    syncer.async_stop = AsyncMock()
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = syncer
+    entry.runtime_data = syncer
     hass.config_entries.async_unload_platforms = AsyncMock(return_value=True)
 
     assert await async_unload_entry(hass, entry)
 
-    syncer.async_stop.assert_awaited_once()
-    assert entry.entry_id not in hass.data[DOMAIN]
+    # Home Assistant invokes the registered async_on_unload callback after this
+    # function succeeds and then clears ConfigEntry.runtime_data.
+    hass.config_entries.async_unload_platforms.assert_awaited_once_with(
+        entry, ["button", "sensor"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_remove_entry_deletes_persisted_data(hass, entry, monkeypatch):
+    remove = AsyncMock()
+    monkeypatch.setattr(
+        "custom_components.todo_sync.TodoSyncStorage.async_remove", remove
+    )
+
+    await async_remove_entry(hass, entry)
+
+    remove.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -77,6 +110,7 @@ async def test_reload_delegates_to_config_entry_manager(hass, entry):
 @pytest.mark.asyncio
 async def test_stop_waits_for_in_flight_sync_lock(hass, entry):
     syncer = TodoSyncer(hass, entry)
+    syncer._storage_loaded = True
     syncer._store.async_save = AsyncMock()
     await syncer._lock.acquire()
 
@@ -90,3 +124,17 @@ async def test_stop_waits_for_in_flight_sync_lock(hass, entry):
     await stop_task
 
     syncer._store.async_save.assert_awaited_once_with(syncer._store_data())
+
+
+@pytest.mark.asyncio
+async def test_stop_does_not_overwrite_storage_when_load_fails(hass, entry):
+    syncer = TodoSyncer(hass, entry)
+    syncer._store.async_load = AsyncMock(side_effect=OSError("storage unavailable"))
+    syncer._store.async_save = AsyncMock()
+
+    with pytest.raises(OSError, match="storage unavailable"):
+        await syncer.async_start()
+
+    await syncer.async_stop()
+
+    syncer._store.async_save.assert_not_awaited()

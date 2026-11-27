@@ -220,6 +220,8 @@ async def test_restart_restores_pending_write_expectations(syncer):
 
 @pytest.mark.asyncio
 async def test_stop_flushes_latest_snapshot(syncer):
+    # Model a running syncer whose persisted state was loaded successfully.
+    syncer._storage_loaded = True
     syncer._snapshot = {_identity("Milk", ""): {
         "title": "Milk", "name": "Milk",
         "status": "needs_action", "description": "",
