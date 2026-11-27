@@ -11,6 +11,7 @@ from custom_components.todo_sync.const import (
     CONF_LIST_A,
     CONF_LIST_B,
     CONF_REMOVE_DUPLICATES,
+    CONF_RESET_SYNC_STATE,
     CONF_SPLIT_TITLE,
     DOMAIN,
     SCAN_INTERVAL_MINUTES,
@@ -312,3 +313,36 @@ async def test_setup_rejects_an_existing_pair_in_reverse_order(
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert len(hass.config_entries.async_entries(DOMAIN)) == 1
+
+
+
+@pytest.mark.asyncio
+async def test_reconfigure_same_pair_in_reverse_order_keeps_sync_state(
+    hass, enable_custom_integrations
+):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="todo.list_a|todo.list_b",
+        data={CONF_LIST_A: "todo.list_a", CONF_LIST_B: "todo.list_b},
+        options={CONF_INTERVAL: 45, CONF_REMOVE_DUPLICATES: True, CONF_SPLIT_TITLE: False},
+    )
+    entry.add_to_hass(hass)
+    hass.states.async_set("todo.list_a", "0")
+    hass.states.async_set("todo.list_b", "0")
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={CONF_LIST_A: "todo.list_b", CONF_LIST_B: "todo.list_a"},
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert CONF_RESET_SYNC_STATE not in entry.data
+    assert entry.options == {
+        CONF_INTERVAL: 45,
+        CONF_REMOVE_DUPLICATES: True,
+        CONF_SPLIT_TITLE: False,
+    }
