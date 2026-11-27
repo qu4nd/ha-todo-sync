@@ -4,8 +4,8 @@ import logging
 from itertools import permutations
 from unittest.mock import AsyncMock, Mock, patch
 
-import pytest
 from homeassistant.components.todo import TodoListEntityFeature
+import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.todo_sync.const import (
