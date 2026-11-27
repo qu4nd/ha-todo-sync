@@ -16,10 +16,20 @@
           "remove_duplicates": "Bei neuen Einrichtungen standardmäßig aktiviert. Zusätzliche offene Kopien desselben Eintrags werden als erledigt markiert. Pro Liste bleibt eine offene Kopie erhalten. Jede zusätzliche Kopie benötigt eine eindeutige Provider-UID. Kann der Provider sie nicht eindeutig identifizieren, wird die Synchronisierung aus Sicherheitsgründen angehalten; deaktiviere die Option für dieses Listenpaar.",
           "split_title": "Bei Listen ohne Beschreibungsunterstützung wird das erste Wort als Name und der Rest als Beschreibung verwendet. Deaktiviere die Option, um den vollständigen Titel als Namen beizubehalten."
         }
+      },
+      "reconfigure": {
+        "title": "To-do Sync neu konfigurieren",
+        "description": "Wähle die beiden zu synchronisierenden Listen aus. Wenn du eine Liste änderst, werden der gespeicherte Synchronisierungsstand und offene Schreib-Erwartungen zurückgesetzt. Die aktuellen Inhalte der ausgewählten Listen werden anschließend neu abgeglichen.",
+        "data": {
+          "list_a": "Liste A",
+          "list_b": "Liste B"
+        }
       }
     },
     "error": {
-      "same_list": "Bitte zwei verschiedene Listen wählen."
+      "same_list": "Bitte zwei verschiedene Listen wählen.",
+      "invalid_entity": "Bitte zwei gültige To-do-Listen-Entitäten auswählen.",
+      "entity_not_found": "Eine oder beide ausgewählten To-do-Listen sind derzeit nicht verfügbar."
     },
     "abort": {
       "already_configured": "Dieses Listenpaar ist bereits eingerichtet."
