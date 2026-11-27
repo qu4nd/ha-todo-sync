@@ -8,7 +8,7 @@
 *Purpose-built for **Bring!** ⇄ **Alexa Shopping List**. Designed for Home Assistant To-do entities; compatibility depends on the capabilities and behavior of each provider.*
 
 ![Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fqu4nd%2Fha-todo-sync%2Fmain%2Fcustom_components%2Ftodo_sync%2Fmanifest.json&query=%24.version&label=version&color=blue&style=for-the-badge)
-[![HA Version](https://img.shields.io/badge/Home%20Assistant-2026.10.0%2B-41BDF5?style=for-the-badge&logo=home-assistant&logoColor=white)](https://www.home-assistant.io/)
+[![HA Version](https://img.shields.io/badge/Home%20Assistant-2025.8.0%2B-41BDF5?style=for-the-badge&logo=home-assistant&logoColor=white)](https://www.home-assistant.io/)
 [![IoT Class](https://img.shields.io/badge/IoT%20Class-Local%20Push-success?style=for-the-badge)](https://www.home-assistant.io/blog/2016/02/12/classifying-the-internet-of-things/)
 [![License](https://img.shields.io/github/license/qu4nd/ha-todo-sync?style=for-the-badge)](LICENSE)
 [![Privacy](https://img.shields.io/badge/Privacy-Local%20Only-success?style=for-the-badge&logo=homeassistant&logoColor=white)](#-privacy--your-data-stays-yours)
@@ -33,7 +33,9 @@
 
 ---
 
-### Tested To-do Lists
+### Provider examples
+
+The following Home Assistant integrations expose to-do entities that can be used with To-do Sync. This list is illustrative, not an exhaustive compatibility matrix or a guarantee for every provider version and configuration. Two-way synchronization requires the selected entities to support creating, updating, and deleting items. To-do Sync checks the advertised `supported_features` before writes; when that metadata is missing or incomplete, Home Assistant's service response remains authoritative. Description support is optional. When duplicate cleanup is enabled, stable item UIDs are required to identify extra copies safely; the option can be disabled for providers that do not expose them.
 
 | Home Assistant integration | To-do list |
 | :--- | :--- |
@@ -76,27 +78,45 @@ Lists like **Bring!** store the item name and its details separately, whereas **
 ## 📦 Installation
 
 > [!IMPORTANT]
-> **Minimum Home Assistant version: 2026.10.0.** The integration is tested with Home Assistant 2026.11.0. Requires at least two existing `todo` entities.
+> **Minimum Home Assistant version: 2025.8.0.** This is the first release that includes the `OptionsFlowWithReload` API used by To-do Sync. The integration requires at least two existing `todo` entities. CI currently tests against the current Home Assistant test dependency; it does not run a separate version matrix against this minimum.
 
-### Option 1: Marketplace / HACS (Recommended)
+### Home Assistant 2026.11.0 and newer: built-in Marketplace (Recommended)
 
-1. Open **HACS** (or **Marketplace**, depending on your Home Assistant version).
-2. Search for **To-do Sync**, open the integration, and install it.
+1. Open **Settings** → **Marketplace**.
+2. Search for **To-do Sync**, open its repository page, and select **Install**.
+3. The Marketplace opens the integration setup flow after installation; a restart is not required for a first install. After installing an update, restart Home Assistant to apply it.
+
+The Marketplace is built into Home Assistant starting with 2026.11. Catalog repositories can be browsed, installed, and updated without connecting a GitHub account.
+
+#### Add a custom repository or fork
+
+To install a repository that is not in the catalog, or a fork:
+
+1. Open **Settings** → **Marketplace** → **Add from link**.
+2. Enter `https://github.com/qu4nd/ha-todo-sync` (or the URL of your fork) and select **Add**.
+3. If asked, select **Integration** as the content type, then open the repository page and select **Install**.
+
+Adding a custom repository requires a GitHub connection. This is not needed to install To-do Sync from the catalog.
+
+### Home Assistant 2026.10.0 and older: HACS
+
+1. Install and configure HACS if it is not already installed.
+2. Open **HACS** → **Integrations**, search for **To-do Sync**, and select **Download**.
 3. Restart Home Assistant.
+4. Go to **Settings** → **Devices & services** → **Add integration**, then search for **To-do Sync**.
 
-#### Alternative: Add as a custom repository
-
-If **To-do Sync** does not appear in the catalog yet, you can add it manually:
-
-1. In HACS, open **⋮** (top right) → **Custom repositories**.
-2. Add `https://github.com/qu4nd/ha-todo-sync` with category **Integration**.
-3. Install **To-do Sync** and restart Home Assistant.
+If the repository is not available in the HACS catalog, open **⋮** → **Custom repositories**, add `https://github.com/qu4nd/ha-todo-sync` with category **Integration**, and install it.
 
 ### Optional beta releases
 
-Stable releases are installed by default. If you want to help test upcoming changes, enable pre-release versions for this repository in HACS. Beta releases are published deliberately for selected changes; they are not generated automatically after every merge. Users who do not opt in continue receiving stable releases only. A stable release following a beta series uses the same target version without the beta suffix.
+Stable releases are installed by default. To opt in to pre-releases:
 
-### Option 2: Manual Installation
+- **Marketplace (2026.11.0+):** Open the To-do Sync Marketplace device page under **Settings** → **Devices & services** → **Marketplace**, enable the **Pre-release** entity, then turn on its switch.
+- **HACS (2026.10.0 and older):** Enable pre-release versions for this repository in HACS.
+
+Beta releases are published deliberately for selected changes; they are not generated automatically after every merge. Users who do not opt in continue receiving stable releases only. A stable release following a beta series uses the same target version without the beta suffix.
+
+### Manual Installation
 
 Copy the `custom_components/todo_sync` folder into your Home Assistant `<config>/custom_components/todo_sync` directory and restart Home Assistant.
 
@@ -106,7 +126,7 @@ Copy the `custom_components/todo_sync` folder into your Home Assistant `<config>
 
 [![Open your Home Assistant instance and start setting up a new integration of a specific brand.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=todo_sync)
 
-1. Go to **Settings** → **Devices & services** → **Add integration** → search for **To-do Sync**.
+1. If the setup flow did not open automatically after a Marketplace install, go to **Settings** → **Devices & services** → **Add integration** → search for **To-do Sync**. After a HACS installation, this step is required.
 2. Select **List A** and **List B** (must be two different `todo` entities), then configure the synchronization options in the same setup dialog.
 3. The sync interval defaults to `5 minutes` (range `1–1440 min`). Title splitting is enabled by default. Duplicate cleanup is enabled by default for new setups. Before each synchronization, To-do Sync checks the currently open items on both lists and marks additional open occurrences of the same logical item as completed, keeping one open occurrence per list. Matching uses the normalized item name and description (case-insensitive; surrounding whitespace is ignored). Each extra occurrence must have a unique provider UID so it can be addressed safely. If a provider does not expose a unique UID or the cleanup cannot be verified, that sync run is stopped before normal synchronization continues; disable the option for that list pair if the provider cannot safely address duplicates. Existing configurations keep their previously stored setting and are not switched on by this change. Previously completed provider history is not fetched or modified.
 4. You can change all three settings later by clicking **Configure** on the integration entry. They apply only to that configured list pair.
@@ -139,7 +159,7 @@ Automations that evaluate the sensor state should account for the additional `wa
 - `last_success`: Timestamp of the last fully successful synchronization.
 - `last_error`: Timestamp of the latest synchronization error.
 - `synced_items`: Number of items successfully created, updated, or removed in the latest run.
-- `last_error_type`: Technical error category (for example, `WriteError`, `TodoListReadError`, or `InvalidItemIdentityError`).
+- `last_error_type`: Technical error category (for example, `WriteError`, `UnsupportedTodoOperationError`, `TodoListReadError`, `DuplicateCleanupError`, or `InvalidItemIdentityError`).
 - `waiting_entity`: Entity ID of the to-do list that is preventing synchronization while the sensor is in `waiting`; `None` otherwise.
 - `waiting_state`: Observed state of that entity (`missing`, `unknown`, or `unavailable`); `None` otherwise.
 
@@ -188,7 +208,7 @@ Snapshots are written only when their persisted data changes. Transient `syncing
 
 ## 🔍 Troubleshooting & Debug Logging
 
-If either configured `todo` entity is missing, `unknown`, or `unavailable`, the sensor enters `waiting`, identifies the affected entity through its diagnostic attributes, and pauses synchronization. The integration retries every `30 seconds` and resumes automatically when both entities are available again. A warning is logged only when the unavailable condition or affected entity changes, avoiding repeated identical warnings. At startup, the integration uses the same waiting behavior until both `todo` entities are available. Debug logging provides privacy-safe operational context through stable `sync_event` and `category` fields, including run start counts, copy/delete direction, pending-write outcomes, and retry timing. Error categories distinguish `read_failure`, `write_failure`, `invalid_identity`, and unexpected failures; the empty-list safety brake is logged separately as `empty_list_guard`. Invalid provider records with missing, empty, or malformed identity data fail the run safely instead of being interpreted as deletions. Error logs include only generic reasons and exception class names, never exception messages or tracebacks, because providers may include item titles or service data in them. List item names, descriptions, and task contents are never included in log messages. While the sensor is in `waiting`, the affected entity ID is exposed through `waiting_entity` and `waiting_state`; warning logs identify the affected list as A or B without printing its entity ID. The synchronization snapshot is stored locally in Home Assistant. To inspect this diagnostic information, enable debug logging:
+If either configured `todo` entity is missing, `unknown`, or `unavailable`, the sensor enters `waiting`, identifies the affected entity through its diagnostic attributes, and pauses synchronization. The integration retries every `30 seconds` and resumes automatically when both entities are available again. A warning is logged only when the unavailable condition or affected entity changes, avoiding repeated identical warnings. At startup, the integration uses the same waiting behavior until both `todo` entities are available. Debug logging provides privacy-safe operational context through stable `sync_event` and `category` fields, including run start counts, copy/delete direction, pending-write outcomes, and retry timing. Error categories distinguish `read_failure`, `write_failure`, `unsupported_operation`, `duplicate_cleanup_failure`, `invalid_identity`, and unexpected failures; the empty-list safety brake is logged separately as `empty_list_guard`. Invalid provider records with missing, empty, or malformed identity data fail the run safely instead of being interpreted as deletions. Error logs include only generic reasons and exception class names, never exception messages or tracebacks, because providers may include item titles or service data in them. List item names, descriptions, and task contents are never included in log messages. While the sensor is in `waiting`, the affected entity ID is exposed through `waiting_entity` and `waiting_state`; warning logs identify the affected list as A or B without printing its entity ID. The synchronization snapshot is stored locally in Home Assistant. To inspect this diagnostic information, enable debug logging:
 
 **Option A: Temporary via UI**  
 Go to **Developer tools** → **Actions** → call `logger.set_level`:
