@@ -3,7 +3,7 @@
 import pytest
 
 from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER
-from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.data_entry_flow import FlowResultType, InvalidData
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.todo_sync.const import (
@@ -166,7 +166,8 @@ async def test_reconfigure_updates_existing_entry_and_preserves_options(
     assert len(hass.config_entries.async_entries(DOMAIN)) == 1
     assert entry.data[CONF_LIST_A] == "todo.list_a"
     assert entry.data[CONF_LIST_B] == "todo.list_c"
-    assert entry.data["reset_sync_state"] is True
+    # The reload runs setup, which consumes and removes the one-shot reset marker.
+    assert CONF_RESET_SYNC_STATE not in entry.data
     assert entry.unique_id == "todo.list_a|todo.list_b"
     assert entry.options == {
         CONF_INTERVAL: 30,
@@ -209,13 +210,11 @@ async def test_reconfigure_rejects_non_todo_entity(hass, enable_custom_integrati
         DOMAIN,
         context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
     )
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        user_input={CONF_LIST_A: "todo.list_a", CONF_LIST_B: "sensor.other"},
-    )
-
-    assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {"base": "invalid_entity"}
+    with pytest.raises(InvalidData):
+        await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={CONF_LIST_A: "todo.list_a", CONF_LIST_B: "sensor.other"},
+        )
 
 @pytest.mark.asyncio
 async def test_reconfigure_rejects_missing_entity(hass, enable_custom_integrations):
