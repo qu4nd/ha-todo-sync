@@ -3,20 +3,21 @@
 from __future__ import annotations
 
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from . import TodoSyncConfigEntry
 from .const import DOMAIN
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: TodoSyncConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
-    syncer = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([SyncStatusSensor(entry, syncer)])
+    async_add_entities([SyncStatusSensor(entry, entry.runtime_data)])
 
 
 class SyncStatusSensor(SensorEntity):
@@ -28,7 +29,7 @@ class SyncStatusSensor(SensorEntity):
     _attr_should_poll = False
     _attr_icon = "mdi:sync"
 
-    def __init__(self, entry: ConfigEntry, syncer) -> None:
+    def __init__(self, entry: TodoSyncConfigEntry, syncer) -> None:
         self._syncer = syncer
         self._attr_unique_id = f"{entry.entry_id}_sync_status"
         self._attr_device_info = DeviceInfo(
