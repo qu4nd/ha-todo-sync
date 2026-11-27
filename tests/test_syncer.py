@@ -148,7 +148,13 @@ async def test_call_does_not_assume_missing_or_invalid_capabilities_are_unsuppor
 
 @pytest.mark.asyncio
 async def test_call_checks_description_feature_when_description_is_sent(syncer, hass):
-    hass.states.async_set("todo.a", "0", attributes={"supported_features": 0})
+    hass.states.async_set(
+        "todo.a",
+        "0",
+        attributes={
+            "supported_features": int(TodoListEntityFeature.CREATE_TODO_ITEM)
+        },
+    )
     data = {"entity_id": "todo.a", "item": "Milk", "description": "1 litre"}
 
     with patch.object(type(syncer.hass.services), "async_call", autospec=True) as call:
