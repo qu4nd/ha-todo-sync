@@ -74,6 +74,15 @@ class _InvalidItemIdentityError(ValueError):
         self.reason = reason
 
 
+class _UnsupportedTodoOperationError(RuntimeError):
+    """Raised when a todo entity explicitly does not support a write operation."""
+
+    def __init__(self, service: str, feature: TodoListEntityFeature) -> None:
+        super().__init__(f"{service} requires {feature.name}")
+        self.service = service
+        self.feature = feature
+
+
 class TodoSyncer:
     """Syncs two lists using a snapshot of the last synced state for diffing."""
 
@@ -104,6 +113,7 @@ class TodoSyncer:
         self._storage_loaded = False
         self._retry_attempt = 0
         self._last_synced_items = 0
+        self._last_write_error_type: str | None = None
         self._sync_deferred = False
         self._status = SyncStatus()
         self._status_listeners = []
@@ -345,7 +355,7 @@ class TodoSyncer:
                     await self._set_status(
                         SyncState.ERROR,
                         last_error=self._now(),
-                        last_error_type="WriteError",
+                        last_error_type=self._last_write_error_type or "WriteError",
                         synced_items=self._last_synced_items,
                     )
                     self._schedule_retry(trigger, "write_failure")
@@ -407,7 +417,7 @@ class TodoSyncer:
             if not isinstance(description, str):
                 raise _InvalidItemIdentityError(entity_id, "invalid_description")
             name, details = summary.strip(), description.strip()
-            if not supports:
+            if supports is False:
                 if self.split_title:
                     name, details = self._split_title(name)
                 else:
@@ -462,7 +472,7 @@ class TodoSyncer:
             if not isinstance(description, str):
                 raise _InvalidItemIdentityError(entity_id, "invalid_description")
             name, desc = title, description.strip()
-            if not supports:
+            if supports is False:
                 if self.split_title:
                     name, desc = self._split_title(title)
                 else:
@@ -496,15 +506,27 @@ class TodoSyncer:
             return "", ""
         return parts[0], parts[1] if len(parts) == 2 else ""
 
-    def _supports_description(self, entity_id: str) -> bool:
+    def _supports_feature(
+        self, entity_id: str, feature: TodoListEntityFeature
+    ) -> bool | None:
+        """Return feature support, or None when Home Assistant has no usable metadata."""
         state = self.hass.states.get(entity_id)
-        features = state.attributes.get("supported_features", 0) if state else 0
-        return bool(features & TodoListEntityFeature.SET_DESCRIPTION_ON_ITEM)
+        if state is None:
+            return None
+        features = state.attributes.get("supported_features")
+        if isinstance(features, bool) or not isinstance(features, int) or features < 0:
+            return None
+        return bool(features & feature)
+
+    def _supports_description(self, entity_id: str) -> bool | None:
+        return self._supports_feature(
+            entity_id, TodoListEntityFeature.SET_DESCRIPTION_ON_ITEM
+        )
 
     def _title(self, entity_id: str, name: str, desc: str) -> str:
         # Title-only providers (notably Alexa) carry details in the title. Keep this
         # translation at the provider boundary; the shared ItemKey remains name/details.
-        if desc and not self._supports_description(entity_id):
+        if desc and self._supports_description(entity_id) is False:
             return f"{name} {desc}"
         return name
 
@@ -513,6 +535,25 @@ class TodoSyncer:
         return None if item is None else (item["status"], item.get("description", ""))
 
     async def _call(self, service: str, data: dict) -> None:
+        """Validate advertised write capabilities before delegating to Home Assistant."""
+        required_features = {
+            "add_item": TodoListEntityFeature.CREATE_TODO_ITEM,
+            "update_item": TodoListEntityFeature.UPDATE_TODO_ITEM,
+            "remove_item": TodoListEntityFeature.DELETE_TODO_ITEM,
+        }
+        required_feature = required_features.get(service)
+        if required_feature and self._supports_feature(
+            data["entity_id"], required_feature
+        ) is False:
+            raise _UnsupportedTodoOperationError(service, required_feature)
+
+        if "description" in data and self._supports_feature(
+            data["entity_id"], TodoListEntityFeature.SET_DESCRIPTION_ON_ITEM
+        ) is False:
+            raise _UnsupportedTodoOperationError(
+                service, TodoListEntityFeature.SET_DESCRIPTION_ON_ITEM
+            )
+
         await self.hass.services.async_call("todo", service, data, blocking=True)
 
     async def _apply(
@@ -558,7 +599,7 @@ class TodoSyncer:
                 item.get("uid") for item in current.values() if item.get("uid")
             }
             data = {"entity_id": entity_id, "item": title}
-            if supports and target["description"]:
+            if supports is not False and target["description"]:
                 data["description"] = target["description"]
             await self._call("add_item", data)
             existing = {
@@ -572,7 +613,7 @@ class TodoSyncer:
             # but different details is never modified by mistake.
             if target["status"] != OPEN:
                 refreshed = await self._fetch(entity_id)
-                expected_description = target["description"] if supports else ""
+                expected_description = target["description"] if supports is not False else ""
                 created_item = next(
                     (
                         item for item in refreshed
@@ -597,7 +638,7 @@ class TodoSyncer:
         if existing["status"] != target["status"]:
             data["status"] = target["status"]
         if existing["description"] != target["description"]:
-            if supports:
+            if supports is not False:
                 data["description"] = target["description"]
             else:
                 data["rename"] = self._title(
@@ -737,7 +778,7 @@ class TodoSyncer:
         for snapshot_key, snapshot_item in self._snapshot.items():
             if snapshot_item["status"] != OPEN:
                 continue
-            if supports_description:
+            if supports_description is not False:
                 matches = [
                     key for key, item in items.items()
                     if item["name"] == snapshot_item["name"]
@@ -890,13 +931,23 @@ class TodoSyncer:
         except Exception as err:  # noqa: BLE001
             # Keep the old baseline for this item so the next run retries it. Other
             # items can still sync; _run schedules a bounded retry after this pass.
+            self._last_write_error_type = type(err).__name__
             destination_side = "A" if dest_id == self.a else "B"
-            _LOGGER.error(
-                "sync_event=write_failed category=write_failure "
-                "destination=%s error=%s",
-                destination_side,
-                type(err).__name__,
-            )
+            if isinstance(err, _UnsupportedTodoOperationError):
+                _LOGGER.error(
+                    "sync_event=write_failed category=unsupported_operation "
+                    "destination=%s operation=%s required_feature=%s",
+                    destination_side,
+                    err.service,
+                    err.feature.name,
+                )
+            else:
+                _LOGGER.error(
+                    "sync_event=write_failed category=write_failure "
+                    "destination=%s error=%s",
+                    destination_side,
+                    type(err).__name__,
+                )
             if s:
                 new_snapshot[key] = s
             return True
@@ -908,6 +959,7 @@ class TodoSyncer:
 
     async def _sync(self, trigger: str | None) -> bool:
         self._sync_deferred = False
+        self._last_write_error_type = None
         # Read both lists completely before applying anything. A failed read must
         # never be interpreted as an empty list or advance the persisted snapshot.
         raw_a, raw_b = await self._read_lists()
