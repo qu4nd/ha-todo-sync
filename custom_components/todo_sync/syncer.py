@@ -113,6 +113,7 @@ class TodoSyncer:
         self._storage_loaded = False
         self._retry_attempt = 0
         self._last_synced_items = 0
+        self._last_write_error_type: str | None = None
         self._sync_deferred = False
         self._status = SyncStatus()
         self._status_listeners = []
@@ -354,7 +355,7 @@ class TodoSyncer:
                     await self._set_status(
                         SyncState.ERROR,
                         last_error=self._now(),
-                        last_error_type="WriteError",
+                        last_error_type=self._last_write_error_type or "WriteError",
                         synced_items=self._last_synced_items,
                     )
                     self._schedule_retry(trigger, "write_failure")
@@ -930,6 +931,7 @@ class TodoSyncer:
         except Exception as err:  # noqa: BLE001
             # Keep the old baseline for this item so the next run retries it. Other
             # items can still sync; _run schedules a bounded retry after this pass.
+            self._last_write_error_type = type(err).__name__
             destination_side = "A" if dest_id == self.a else "B"
             if isinstance(err, _UnsupportedTodoOperationError):
                 _LOGGER.error(
@@ -957,6 +959,7 @@ class TodoSyncer:
 
     async def _sync(self, trigger: str | None) -> bool:
         self._sync_deferred = False
+        self._last_write_error_type = None
         # Read both lists completely before applying anything. A failed read must
         # never be interpreted as an empty list or advance the persisted snapshot.
         raw_a, raw_b = await self._read_lists()
