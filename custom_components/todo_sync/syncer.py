@@ -612,7 +612,7 @@ class TodoSyncer:
             # but different details is never modified by mistake.
             if target["status"] != OPEN:
                 refreshed = await self._fetch(entity_id)
-                expected_description = target["description"] if supports else ""
+                expected_description = target["description"] if supports is not False else ""
                 created_item = next(
                     (
                         item for item in refreshed
@@ -777,7 +777,7 @@ class TodoSyncer:
         for snapshot_key, snapshot_item in self._snapshot.items():
             if snapshot_item["status"] != OPEN:
                 continue
-            if supports_description:
+            if supports_description is not False:
                 matches = [
                     key for key, item in items.items()
                     if item["name"] == snapshot_item["name"]
