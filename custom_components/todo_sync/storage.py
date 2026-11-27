@@ -28,6 +28,10 @@ class TodoSyncStorage:
         self.set_loaded_data(data)
         return data
 
+    async def async_remove(self) -> None:
+        """Remove persisted data when its owning config entry is permanently deleted."""
+        await self._store.async_remove()
+
     def set_loaded_data(self, data: dict | None) -> None:
         """Record the payload read from storage for subsequent write deduplication."""
         self._last_saved_data = copy.deepcopy(data)
