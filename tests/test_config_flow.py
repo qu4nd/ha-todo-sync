@@ -280,3 +280,35 @@ async def test_reconfigure_rejects_pair_already_used_by_another_entry(
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_LIST_A] == "todo.list_a"
     assert entry.data[CONF_LIST_B] == "todo.list_b"
+
+
+
+@pytest.mark.asyncio
+async def test_setup_rejects_an_existing_pair_in_reverse_order(
+    hass, enable_custom_integrations
+):
+    existing = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="todo.list_a|todo.list_b",
+        data={CONF_LIST_A: "todo.list_a", CONF_LIST_B: "todo.list_b"},
+    )
+    existing.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_LIST_A: "todo.list_b",
+            CONF_LIST_B: "todo.list_a",
+            CONF_INTERVAL: SCAN_INTERVAL_MINUTES,
+            CONF_REMOVE_DUPLICATES: False,
+            CONF_SPLIT_TITLE: True,
+        },
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert len(hass.config_entries.async_entries(DOMAIN)) == 1
