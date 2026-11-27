@@ -7,14 +7,17 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.todo_sync import (
-    _async_reload,
     async_remove_entry,
     async_setup_entry,
     async_unload_entry,
 )
-from custom_components.todo_sync.const import CONF_LIST_A, CONF_LIST_B, DOMAIN
+from custom_components.todo_sync.const import (
+    CONF_LIST_A,
+    CONF_LIST_B,
+    CONF_RESET_SYNC_STATE,
+    DOMAIN,
+)
 from custom_components.todo_sync.syncer import TodoSyncer
-
 
 @pytest.fixture
 def entry():
@@ -22,7 +25,6 @@ def entry():
         domain=DOMAIN,
         data={CONF_LIST_A: "todo.a", CONF_LIST_B: "todo.b"},
     )
-
 
 @pytest.mark.asyncio
 async def test_setup_stores_syncer_in_runtime_data_and_registers_cleanup(
@@ -44,7 +46,6 @@ async def test_setup_stores_syncer_in_runtime_data_and_registers_cleanup(
         entry, ["button", "sensor"]
     )
 
-
 @pytest.mark.asyncio
 async def test_setup_failure_has_registered_syncer_cleanup(hass, entry, monkeypatch):
     syncer = Mock()
@@ -59,7 +60,6 @@ async def test_setup_failure_has_registered_syncer_cleanup(hass, entry, monkeypa
     assert entry.runtime_data is syncer
     on_unload.assert_any_call(syncer.async_stop)
 
-
 @pytest.mark.asyncio
 async def test_unload_failure_keeps_runtime_data(hass, entry):
     syncer = Mock()
@@ -69,7 +69,6 @@ async def test_unload_failure_keeps_runtime_data(hass, entry):
     assert not await async_unload_entry(hass, entry)
 
     assert entry.runtime_data is syncer
-
 
 @pytest.mark.asyncio
 async def test_successful_unload_delegates_cleanup_to_config_entry(hass, entry):
@@ -85,7 +84,6 @@ async def test_successful_unload_delegates_cleanup_to_config_entry(hass, entry):
         entry, ["button", "sensor"]
     )
 
-
 @pytest.mark.asyncio
 async def test_remove_entry_deletes_persisted_data(hass, entry, monkeypatch):
     remove = AsyncMock()
@@ -96,16 +94,6 @@ async def test_remove_entry_deletes_persisted_data(hass, entry, monkeypatch):
     await async_remove_entry(hass, entry)
 
     remove.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_reload_delegates_to_config_entry_manager(hass, entry):
-    hass.config_entries.async_reload = AsyncMock()
-
-    await _async_reload(hass, entry)
-
-    hass.config_entries.async_reload.assert_awaited_once_with(entry.entry_id)
-
 
 @pytest.mark.asyncio
 async def test_stop_waits_for_in_flight_sync_lock(hass, entry):
@@ -125,7 +113,6 @@ async def test_stop_waits_for_in_flight_sync_lock(hass, entry):
 
     syncer._store.async_save.assert_awaited_once_with(syncer._store_data())
 
-
 @pytest.mark.asyncio
 async def test_stop_does_not_overwrite_storage_when_load_fails(hass, entry):
     syncer = TodoSyncer(hass, entry)
@@ -138,3 +125,37 @@ async def test_stop_does_not_overwrite_storage_when_load_fails(hass, entry):
     await syncer.async_stop()
 
     syncer._store.async_save.assert_not_awaited()
+
+@pytest.mark.asyncio
+async def test_reconfigure_reset_marker_clears_old_storage_before_start(
+    hass, entry, monkeypatch
+):
+    entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            **entry.data,
+            CONF_LIST_A: "todo.new_a",
+            CONF_LIST_B: "todo.new_b",
+            CONF_RESET_SYNC_STATE: True,
+        },
+    )
+    remove = AsyncMock()
+    monkeypatch.setattr(
+        "custom_components.todo_sync.TodoSyncStorage.async_remove", remove
+    )
+    syncer = Mock()
+    syncer.async_start = AsyncMock()
+    entry.async_on_unload = Mock()
+    monkeypatch.setattr(
+        "custom_components.todo_sync.TodoSyncer", lambda _hass, _entry: syncer
+    )
+    hass.config_entries.async_forward_entry_setups = AsyncMock()
+
+    assert await async_setup_entry(hass, entry)
+
+    remove.assert_awaited_once()
+    assert CONF_RESET_SYNC_STATE not in entry.data
+    assert entry.data[CONF_LIST_A] == "todo.new_a"
+    assert entry.data[CONF_LIST_B] == "todo.new_b"
+    syncer.async_start.assert_awaited_once()

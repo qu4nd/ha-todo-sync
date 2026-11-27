@@ -16,10 +16,19 @@
           "remove_duplicates": "Enabled by default for new setups. Completes extra open copies of the same item, keeping one open copy per list. Each extra copy must have a unique provider UID; if the provider cannot identify it safely, synchronization stops and this option must be disabled for that list pair.",
           "split_title": "For lists without description support, use the first word as the item name and the rest as its description. Turn this off to keep the full title as the item name."
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure To-do Sync",
+        "description": "Choose the two lists to synchronize. Changing either list resets the saved sync baseline and pending write tracking; the current contents of the selected lists will be synchronized again.",
+        "data": {
+          "list_a": "List A",
+          "list_b": "List B"
+        }
       }
     },
     "error": {
-      "same_list": "Please select two different lists."
+      "same_list": "Please select two different lists.",
+      "entity_not_found": "One or both selected to-do lists are not currently available."
     },
     "abort": {
       "already_configured": "This pair of lists is already configured."
