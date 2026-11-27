@@ -28,7 +28,6 @@
     },
     "error": {
       "same_list": "Bitte zwei verschiedene Listen wählen.",
-      "invalid_entity": "Bitte zwei gültige To-do-Listen-Entitäten auswählen.",
       "entity_not_found": "Eine oder beide ausgewählten To-do-Listen sind derzeit nicht verfügbar."
     },
     "abort": {
