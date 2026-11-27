@@ -5,7 +5,7 @@ from __future__ import annotations
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
+from .const import CONF_RESET_SYNC_STATE, DOMAIN
 from .storage import TodoSyncStorage
 from .syncer import TodoSyncer
 
@@ -15,6 +15,14 @@ TodoSyncConfigEntry = ConfigEntry[TodoSyncer]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: TodoSyncConfigEntry) -> bool:
+    if entry.data.get(CONF_RESET_SYNC_STATE):
+        # The previous syncer has already stopped and flushed its state during
+        # reload. Remove that old pair's baseline before starting with new lists.
+        await TodoSyncStorage(hass, f"{DOMAIN}.{entry.entry_id}").async_remove()
+        updated_data = dict(entry.data)
+        updated_data.pop(CONF_RESET_SYNC_STATE)
+        hass.config_entries.async_update_entry(entry, data=updated_data)
+
     syncer = TodoSyncer(hass, entry)
     entry.runtime_data = syncer
     # Home Assistant runs this callback after a successful unload and also when
@@ -23,12 +31,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: TodoSyncConfigEntry) -> 
 
     await syncer.async_start()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(_async_reload))
     return True
 
-
-async def _async_reload(hass: HomeAssistant, entry: TodoSyncConfigEntry) -> None:
-    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: TodoSyncConfigEntry) -> bool:
