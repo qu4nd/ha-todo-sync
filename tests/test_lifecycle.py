@@ -7,12 +7,16 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.todo_sync import (
-    _async_reload,
     async_remove_entry,
     async_setup_entry,
     async_unload_entry,
 )
-from custom_components.todo_sync.const import CONF_LIST_A, CONF_LIST_B, DOMAIN
+from custom_components.todo_sync.const import (
+    CONF_LIST_A,
+    CONF_LIST_B,
+    CONF_RESET_SYNC_STATE,
+    DOMAIN,
+)
 from custom_components.todo_sync.syncer import TodoSyncer
 
 
@@ -99,15 +103,6 @@ async def test_remove_entry_deletes_persisted_data(hass, entry, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_reload_delegates_to_config_entry_manager(hass, entry):
-    hass.config_entries.async_reload = AsyncMock()
-
-    await _async_reload(hass, entry)
-
-    hass.config_entries.async_reload.assert_awaited_once_with(entry.entry_id)
-
-
-@pytest.mark.asyncio
 async def test_stop_waits_for_in_flight_sync_lock(hass, entry):
     syncer = TodoSyncer(hass, entry)
     syncer._storage_loaded = True
@@ -138,3 +133,39 @@ async def test_stop_does_not_overwrite_storage_when_load_fails(hass, entry):
     await syncer.async_stop()
 
     syncer._store.async_save.assert_not_awaited()
+
+
+
+@pytest.mark.asyncio
+async def test_reconfigure_reset_marker_clears_old_storage_before_start(
+    hass, entry, monkeypatch
+):
+    entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            **entry.data,
+            CONF_LIST_A: "todo.new_a",
+            CONF_LIST_B: "todo.new_b",
+            CONF_RESET_SYNC_STATE: True,
+        },
+    )
+    remove = AsyncMock()
+    monkeypatch.setattr(
+        "custom_components.todo_sync.TodoSyncStorage.async_remove", remove
+    )
+    syncer = Mock()
+    syncer.async_start = AsyncMock()
+    entry.async_on_unload = Mock()
+    monkeypatch.setattr(
+        "custom_components.todo_sync.TodoSyncer", lambda _hass, _entry: syncer
+    )
+    hass.config_entries.async_forward_entry_setups = AsyncMock()
+
+    assert await async_setup_entry(hass, entry)
+
+    remove.assert_awaited_once()
+    assert CONF_RESET_SYNC_STATE not in entry.data
+    assert entry.data[CONF_LIST_A] == "todo.new_a"
+    assert entry.data[CONF_LIST_B] == "todo.new_b"
+    syncer.async_start.assert_awaited_once()
