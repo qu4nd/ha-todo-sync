@@ -104,8 +104,6 @@ class TodoSyncConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             list_b = user_input[CONF_LIST_B]
             if list_a == list_b:
                 errors["base"] = "same_list"
-            elif not list_a.startswith("todo.") or not list_b.startswith("todo."):
-                errors["base"] = "invalid_entity"
             elif self.hass.states.get(list_a) is None or self.hass.states.get(list_b) is None:
                 errors["base"] = "entity_not_found"
             elif _pair_is_configured(
