@@ -28,7 +28,6 @@
     },
     "error": {
       "same_list": "Please select two different lists.",
-      "invalid_entity": "Select two valid to-do list entities.",
       "entity_not_found": "One or both selected to-do lists are not currently available."
     },
     "abort": {
