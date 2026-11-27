@@ -35,7 +35,7 @@
 
 ### Provider examples
 
-The following Home Assistant integrations expose to-do entities that can be used with To-do Sync. This list is illustrative, not an exhaustive compatibility matrix or a guarantee for every provider version and configuration. Two-way synchronization requires the selected entities to support creating, updating, and deleting items. Description support is optional; stable item UIDs are required for safe duplicate cleanup.
+The following Home Assistant integrations expose to-do entities that can be used with To-do Sync. This list is illustrative, not an exhaustive compatibility matrix or a guarantee for every provider version and configuration. Two-way synchronization requires the selected entities to support creating, updating, and deleting items. To-do Sync checks the advertised `supported_features` before writes; when that metadata is missing or incomplete, Home Assistant's service response remains authoritative. Description support is optional. When duplicate cleanup is enabled, stable item UIDs are required to identify extra copies safely; the option can be disabled for providers that do not expose them.
 
 | Home Assistant integration | To-do list |
 | :--- | :--- |
@@ -78,7 +78,7 @@ Lists like **Bring!** store the item name and its details separately, whereas **
 ## 📦 Installation
 
 > [!IMPORTANT]
-> **Minimum Home Assistant version: 2025.8.0.** This is the first release that includes the `OptionsFlowWithReload` API used by To-do Sync. The integration requires at least two existing `todo` entities.
+> **Minimum Home Assistant version: 2025.8.0.** This is the first release that includes the `OptionsFlowWithReload` API used by To-do Sync. The integration requires at least two existing `todo` entities. CI currently tests against the current Home Assistant test dependency; it does not run a separate version matrix against this minimum.
 
 ### Home Assistant 2026.11.0 and newer: built-in Marketplace (Recommended)
 
@@ -159,7 +159,7 @@ Automations that evaluate the sensor state should account for the additional `wa
 - `last_success`: Timestamp of the last fully successful synchronization.
 - `last_error`: Timestamp of the latest synchronization error.
 - `synced_items`: Number of items successfully created, updated, or removed in the latest run.
-- `last_error_type`: Technical error category (for example, `WriteError`, `UnsupportedTodoOperationError`, `TodoListReadError`, or `InvalidItemIdentityError`).
+- `last_error_type`: Technical error category (for example, `WriteError`, `UnsupportedTodoOperationError`, `TodoListReadError`, `DuplicateCleanupError`, or `InvalidItemIdentityError`).
 - `waiting_entity`: Entity ID of the to-do list that is preventing synchronization while the sensor is in `waiting`; `None` otherwise.
 - `waiting_state`: Observed state of that entity (`missing`, `unknown`, or `unavailable`); `None` otherwise.
 
