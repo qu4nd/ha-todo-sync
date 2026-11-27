@@ -924,6 +924,26 @@ async def test_failed_read_does_not_schedule_retry_after_stop(syncer):
 
 
 @pytest.mark.asyncio
+async def test_unsupported_write_error_is_exposed_in_sync_status(syncer):
+    syncer._ready = lambda: True
+
+    async def fail_with_unsupported_operation(_trigger):
+        syncer._last_write_error_type = "UnsupportedTodoOperationError"
+        return True
+
+    syncer._sync = AsyncMock(side_effect=fail_with_unsupported_operation)
+    syncer._schedule = Mock()
+
+    await syncer._run(None)
+
+    assert syncer.status == "error"
+    assert (
+        syncer.status_attributes["last_error_type"]
+        == "UnsupportedTodoOperationError"
+    )
+
+
+@pytest.mark.asyncio
 async def test_failed_write_schedules_bounded_exponential_retry(syncer):
     syncer._ready = lambda: True
     syncer._sync = AsyncMock(return_value=True)
