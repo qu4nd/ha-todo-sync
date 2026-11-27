@@ -17,7 +17,6 @@ from custom_components.todo_sync.const import (
     SCAN_INTERVAL_MINUTES,
 )
 
-
 @pytest.mark.asyncio
 async def test_setup_stores_lists_as_data_and_settings_as_options(
     hass, enable_custom_integrations
@@ -51,7 +50,6 @@ async def test_setup_stores_lists_as_data_and_settings_as_options(
         CONF_SPLIT_TITLE: False,
     }
 
-
 @pytest.mark.asyncio
 async def test_setup_defaults_are_preserved(hass, enable_custom_integrations):
     result = await hass.config_entries.flow.async_init(
@@ -72,7 +70,6 @@ async def test_setup_defaults_are_preserved(hass, enable_custom_integrations):
     assert entry.options[CONF_INTERVAL] == SCAN_INTERVAL_MINUTES
     assert entry.options[CONF_REMOVE_DUPLICATES] is True
     assert entry.options[CONF_SPLIT_TITLE] is True
-
 
 @pytest.mark.asyncio
 async def test_options_flow_can_change_setup_settings(hass, enable_custom_integrations):
@@ -111,7 +108,6 @@ async def test_options_flow_can_change_setup_settings(hass, enable_custom_integr
         CONF_SPLIT_TITLE: False,
     }
 
-
 @pytest.mark.asyncio
 async def test_setup_rejects_the_same_list_twice(hass, enable_custom_integrations):
     result = await hass.config_entries.flow.async_init(
@@ -132,8 +128,6 @@ async def test_setup_rejects_the_same_list_twice(hass, enable_custom_integration
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "same_list"}
-
-
 
 @pytest.mark.asyncio
 async def test_reconfigure_updates_existing_entry_and_preserves_options(
@@ -180,7 +174,6 @@ async def test_reconfigure_updates_existing_entry_and_preserves_options(
         CONF_SPLIT_TITLE: False,
     }
 
-
 @pytest.mark.asyncio
 async def test_reconfigure_rejects_same_list(hass, enable_custom_integrations):
     entry = MockConfigEntry(
@@ -201,7 +194,6 @@ async def test_reconfigure_rejects_same_list(hass, enable_custom_integrations):
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "same_list"}
-
 
 @pytest.mark.asyncio
 async def test_reconfigure_rejects_non_todo_entity(hass, enable_custom_integrations):
@@ -225,7 +217,6 @@ async def test_reconfigure_rejects_non_todo_entity(hass, enable_custom_integrati
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "invalid_entity"}
 
-
 @pytest.mark.asyncio
 async def test_reconfigure_rejects_missing_entity(hass, enable_custom_integrations):
     entry = MockConfigEntry(
@@ -247,7 +238,6 @@ async def test_reconfigure_rejects_missing_entity(hass, enable_custom_integratio
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "entity_not_found"}
-
 
 @pytest.mark.asyncio
 async def test_reconfigure_rejects_pair_already_used_by_another_entry(
@@ -282,8 +272,6 @@ async def test_reconfigure_rejects_pair_already_used_by_another_entry(
     assert entry.data[CONF_LIST_A] == "todo.list_a"
     assert entry.data[CONF_LIST_B] == "todo.list_b"
 
-
-
 @pytest.mark.asyncio
 async def test_setup_rejects_an_existing_pair_in_reverse_order(
     hass, enable_custom_integrations
@@ -313,8 +301,6 @@ async def test_setup_rejects_an_existing_pair_in_reverse_order(
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert len(hass.config_entries.async_entries(DOMAIN)) == 1
-
-
 
 @pytest.mark.asyncio
 async def test_reconfigure_same_pair_in_reverse_order_keeps_sync_state(
