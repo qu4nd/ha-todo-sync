@@ -110,6 +110,7 @@ async def test_reload_delegates_to_config_entry_manager(hass, entry):
 @pytest.mark.asyncio
 async def test_stop_waits_for_in_flight_sync_lock(hass, entry):
     syncer = TodoSyncer(hass, entry)
+    syncer._storage_loaded = True
     syncer._store.async_save = AsyncMock()
     await syncer._lock.acquire()
 
@@ -123,3 +124,17 @@ async def test_stop_waits_for_in_flight_sync_lock(hass, entry):
     await stop_task
 
     syncer._store.async_save.assert_awaited_once_with(syncer._store_data())
+
+
+@pytest.mark.asyncio
+async def test_stop_does_not_overwrite_storage_when_load_fails(hass, entry):
+    syncer = TodoSyncer(hass, entry)
+    syncer._store.async_load = AsyncMock(side_effect=OSError("storage unavailable"))
+    syncer._store.async_save = AsyncMock()
+
+    with pytest.raises(OSError, match="storage unavailable"):
+        await syncer.async_start()
+
+    await syncer.async_stop()
+
+    syncer._store.async_save.assert_not_awaited()
