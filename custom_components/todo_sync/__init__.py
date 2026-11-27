@@ -13,7 +13,6 @@ PLATFORMS = ["button", "sensor"]
 
 TodoSyncConfigEntry = ConfigEntry[TodoSyncer]
 
-
 async def async_setup_entry(hass: HomeAssistant, entry: TodoSyncConfigEntry) -> bool:
     if entry.data.get(CONF_RESET_SYNC_STATE):
         # The previous syncer has already stopped and flushed its state during
@@ -33,11 +32,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: TodoSyncConfigEntry) -> 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
-
-
 async def async_unload_entry(hass: HomeAssistant, entry: TodoSyncConfigEntry) -> bool:
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-
 
 async def async_remove_entry(
     hass: HomeAssistant, entry: TodoSyncConfigEntry
