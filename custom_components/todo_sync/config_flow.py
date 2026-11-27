@@ -21,7 +21,6 @@ from .const import (
 
 _SELECTOR = selector.EntitySelector(selector.EntitySelectorConfig(domain="todo"))
 
-
 def _pair_is_configured(
     hass, list_a: str, list_b: str, *, exclude_entry_id: str | None = None
 ) -> bool:
@@ -34,7 +33,6 @@ def _pair_is_configured(
         ) == selected
         for entry in hass.config_entries.async_entries(DOMAIN)
     )
-
 
 class TodoSyncConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Select the two lists to keep in sync."""
@@ -147,7 +145,6 @@ class TodoSyncConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=self.add_suggested_values_to_schema(schema, entry.data),
             errors=errors,
         )
-
 
 class TodoSyncOptionsFlow(config_entries.OptionsFlowWithReload):
     """Configure synchronization behavior for this list pair."""
