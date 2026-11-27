@@ -100,6 +100,8 @@ class TodoSyncer:
         self._pending_trigger: str | None = None
         self._empty_list_guard = EmptyListGuard()
         self._stopped = False
+        # Never persist defaults if loading the previous state failed.
+        self._storage_loaded = False
         self._retry_attempt = 0
         self._last_synced_items = 0
         self._sync_deferred = False
@@ -110,6 +112,7 @@ class TodoSyncer:
 
     async def async_start(self) -> None:
         data = await self._store.async_load()
+        self._storage_loaded = True
         self._snapshot = self._store.migrate_snapshot((data or {}).get("snapshot", {}))
         self._pending_writes = (data or {}).get("pending_writes", {})
         # Pending writes use provider-independent identity keys from the previous
@@ -205,7 +208,8 @@ class TodoSyncer:
         # Wait for an in-flight sync so a reloaded instance never overlaps with it
         async with self._lock:
             pass
-        await self._save_store()
+        if self._storage_loaded:
+            await self._save_store()
 
     @callback
     def _on_change(self, event: Event) -> None:
