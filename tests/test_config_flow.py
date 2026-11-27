@@ -323,8 +323,12 @@ async def test_reconfigure_same_pair_in_reverse_order_keeps_sync_state(
     entry = MockConfigEntry(
         domain=DOMAIN,
         unique_id="todo.list_a|todo.list_b",
-        data={CONF_LIST_A: "todo.list_a", CONF_LIST_B: "todo.list_b},
-        options={CONF_INTERVAL: 45, CONF_REMOVE_DUPLICATES: True, CONF_SPLIT_TITLE: False},
+        data={CONF_LIST_A: "todo.list_a", CONF_LIST_B: "todo.list_b"},
+        options={
+            CONF_INTERVAL: 45,
+            CONF_REMOVE_DUPLICATES: True,
+            CONF_SPLIT_TITLE: False,
+        },
     )
     entry.add_to_hass(hass)
     hass.states.async_set("todo.list_a", "0")
